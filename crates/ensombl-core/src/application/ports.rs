@@ -273,3 +273,23 @@ pub trait ArchitectureStore: Send + Sync {
         file: &crate::domain::system::overrides::ArchitectureFile,
     ) -> Result<()>;
 }
+
+// Orchestration
+
+/// Tasks and their runs, kept across restarts.
+pub trait TaskStore: Send + Sync {
+    fn list(&self) -> Result<Vec<crate::domain::orchestration::Task>>;
+    fn get(&self, id: &str) -> Result<Option<crate::domain::orchestration::Task>>;
+    /// Inserts or replaces.
+    fn put(&self, task: &crate::domain::orchestration::Task) -> Result<()>;
+    fn delete(&self, id: &str) -> Result<()>;
+    /// A task's runs, oldest first.
+    fn runs(&self, task_id: &str) -> Result<Vec<crate::domain::orchestration::Run>>;
+    fn put_run(&self, run: &crate::domain::orchestration::Run) -> Result<()>;
+}
+
+/// Every event of every run, appended as it happens and replayable later.
+pub trait RunLog: Send + Sync {
+    fn append(&self, run_id: &str, event: &crate::domain::agent_run::RunEvent) -> Result<()>;
+    fn read(&self, run_id: &str) -> Result<Vec<crate::domain::agent_run::RunEvent>>;
+}
