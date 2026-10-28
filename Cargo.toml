@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/ensombl-core", "crates/ensombl-server", "src-tauri"]
+members = ["crates/ensombl-core", "crates/ensombl-mcp", "crates/ensombl-server", "src-tauri"]
 resolver = "3"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
