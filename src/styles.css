@@ -123,3 +123,31 @@
     @apply bg-background text-foreground antialiased;
   }
 }
+
+/* React Flow themed with shadcn tokens. */
+.react-flow {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-color: var(--border);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: oklch(0 0 0 / 55%);
+  --xy-minimap-node-background-color: var(--muted);
+  --xy-minimap-node-stroke-color: var(--border);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-node-boxshadow-selected: none;
+  --xy-selection-background-color: oklch(1 0 0 / 4%);
+  --xy-selection-border: 1px solid var(--ring);
+}
+.react-flow .react-flow__node {
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.react-flow__controls,
+.react-flow__minimap {
+  @apply overflow-hidden rounded-lg border shadow-sm;
+}
