@@ -112,6 +112,8 @@ function Canvas({ system, onShowCode }: CanvasProps) {
       selectable: false,
       draggable: false,
       zIndex: -1,
+      // Decoration only: clicks fall through to the pane.
+      style: { pointerEvents: "none" },
     }))
     const items = view.nodes.flatMap((n): Node[] => {
       const box = layout.nodes.get(n.id)
