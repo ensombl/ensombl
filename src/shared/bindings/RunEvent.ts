@@ -4,7 +4,7 @@ import type { NoticeLevel } from "./NoticeLevel";
 import type { PermissionMode } from "./PermissionMode";
 
 /**
- * One thing that happened in a chat, in order.
+ * One thing that happened in a run, in order.
  */
 export type RunEvent = { "type": "session", sessionId: string, model: string | null, permissionMode: PermissionMode | null, } | { "type": "user", id: string, text: string, 
 /**
