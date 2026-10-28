@@ -1,9 +1,9 @@
 import type { ReactNode } from "react"
 
-import logo from "@/assets/logo.png"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { EnsomblLogo } from "@/shared/ui/ensombl-logo"
 
 // macOS draws the traffic lights over this bar (titleBarStyle: Overlay), so leave room for them.
 const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac")
@@ -19,9 +19,9 @@ export function TitleBar({ version, children }: { version?: string; children?: R
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <img src={logo} alt="ensombl" className="size-7 shrink-0" draggable={false} />
+          <EnsomblLogo className="size-6 shrink-0 text-foreground" />
         </TooltipTrigger>
-        <TooltipContent>ensombl: where clankers come together</TooltipContent>
+        <TooltipContent>Ensombl: where clankers come together</TooltipContent>
       </Tooltip>
       {children}
       {version && (

@@ -99,7 +99,7 @@ impl ShellEnvironment for LoginShell {
         env.push(("PATH".into(), self.path.clone()));
         env.push(("TERM".into(), "xterm-256color".into()));
         env.push(("COLORTERM".into(), "truecolor".into()));
-        env.push(("TERM_PROGRAM".into(), "ensombl".into()));
+        env.push(("TERM_PROGRAM".into(), "Ensombl".into()));
         if !env.iter().any(|(k, _)| k == "LANG") {
             env.push(("LANG".into(), "en_US.UTF-8".into()));
         }

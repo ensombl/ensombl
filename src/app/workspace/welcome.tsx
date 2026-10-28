@@ -1,6 +1,6 @@
 import { FolderPlus, Loader2 } from "lucide-react"
 
-import logo from "@/assets/logo.png"
+import { EnsomblLogo } from "@/shared/ui/ensombl-logo"
 
 import { Button } from "@/components/ui/button"
 import { useAddProjectFlow } from "@/features/workspaces/model/use-add-project"
@@ -10,7 +10,7 @@ export function Welcome() {
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
-      <img src={logo} alt="ensombl" className="size-24" draggable={false} />
+      <EnsomblLogo className="size-20 text-foreground" />
       <div className="space-y-1">
         <p className="text-sm font-medium">Add a project to get started</p>
         <p className="max-w-xs text-sm text-muted-foreground">

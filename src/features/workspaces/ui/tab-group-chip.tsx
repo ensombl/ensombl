@@ -50,7 +50,7 @@ export function TabGroupChip({ project, tabCount }: { project: Project; tabCount
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onSelect={() => removeProject.mutate({ projectId: project.id })}>
-          <Trash2 /> Remove project from ensombl
+          <Trash2 /> Remove project from Ensombl
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
