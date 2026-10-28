@@ -17,7 +17,11 @@ interface SequenceDiagramProps {
   onStep: (file: string, line: number) => void
 }
 
-/** Lifelines with one arrow per step; async steps are dashed, self-calls loop back. */
+/**
+ * Lifelines with one arrow per step; async steps are dashed, self-calls loop
+ * back. The participant row is sticky, so it stays pinned while you scroll.
+ * Rows are positioned from `HEADER` down, inside the same scroll container.
+ */
 export const SequenceDiagram = memo(function SequenceDiagram({ sequence, nodes, onStep }: SequenceDiagramProps) {
   const width = sequence.participants.length * COLUMN
   const height = HEADER + sequence.rows.length * ROW + 24
@@ -25,6 +29,27 @@ export const SequenceDiagram = memo(function SequenceDiagram({ sequence, nodes, 
 
   return (
     <div className="relative" style={{ width, height }}>
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur" style={{ width, height: HEADER }}>
+        {sequence.participants.map((id, i) => {
+          const node = nodes.get(id)
+          return (
+            <div
+              key={id}
+              className="absolute top-2 flex h-10 items-center gap-1.5 rounded-md border bg-card px-2 text-xs shadow-xs"
+              style={{
+                left: i * COLUMN + 8,
+                width: COLUMN - 16,
+                borderTopColor: node ? LAYER_COLOR[node.layer] : undefined,
+                borderTopWidth: 2,
+              }}
+              title={node?.description ?? undefined}
+            >
+              {node && <NodeIcon node={node} className="size-3.5 shrink-0 text-muted-foreground" />}
+              <span className="truncate font-medium">{node?.name ?? id.split(/[#:]/).pop()}</span>
+            </div>
+          )
+        })}
+      </div>
       <svg className="absolute inset-0" width={width} height={height}>
         <defs>
           {Object.entries(KIND_STYLE).map(([kind, style]) => (
@@ -59,26 +84,6 @@ export const SequenceDiagram = memo(function SequenceDiagram({ sequence, nodes, 
           )
         })}
       </svg>
-
-      {sequence.participants.map((id, i) => {
-        const node = nodes.get(id)
-        return (
-          <div
-            key={id}
-            className="absolute top-2 flex h-10 items-center gap-1.5 rounded-md border bg-card px-2 text-xs shadow-xs"
-            style={{
-              left: i * COLUMN + 8,
-              width: COLUMN - 16,
-              borderTopColor: node ? LAYER_COLOR[node.layer] : undefined,
-              borderTopWidth: 2,
-            }}
-            title={node?.description ?? undefined}
-          >
-            {node && <NodeIcon node={node} className="size-3.5 shrink-0 text-muted-foreground" />}
-            <span className="truncate font-medium">{node?.name ?? id.split(/[#:]/).pop()}</span>
-          </div>
-        )
-      })}
 
       {sequence.rows.map((row, r) => {
         const self = row.fromIndex === row.toIndex

@@ -14,6 +14,8 @@ export type SystemFlowEdge = Edge<
     highlighted: boolean
     dimmed: boolean
     showLabel: boolean
+    /** Lots of edges on screen: draw the rest faintly so highlighted ones read. */
+    busy: boolean
     points?: Point[]
   },
   "system"
@@ -48,7 +50,7 @@ export const SystemEdgeView = memo(function SystemEdgeView({
         markerEnd={`url(#${markerFor(kind)})`}
         style={{
           stroke: style.color,
-          strokeOpacity: data?.highlighted ? 1 : data?.dimmed ? 0.1 : 0.55,
+          strokeOpacity: data?.highlighted ? 1 : data?.dimmed ? 0.08 : data?.busy ? 0.22 : 0.55,
           strokeWidth: data?.highlighted ? width + 0.75 : width,
           strokeDasharray: style.dash,
         }}
