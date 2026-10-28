@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
+use crate::application::commands::indexing::IndexingCommands;
 use crate::application::commands::workspaces::WorkspaceCommands;
 use crate::application::queries::get_app_info::GetAppInfoHandler;
+use crate::application::queries::model::ModelQueries;
 use crate::application::queries::workspaces::WorkspaceQueries;
 
 /// Handlers wired by the composition root and managed by Tauri.
@@ -10,4 +12,6 @@ pub struct Handlers {
     pub get_app_info: GetAppInfoHandler,
     pub workspace_commands: Arc<WorkspaceCommands>,
     pub workspace_queries: Arc<WorkspaceQueries>,
+    pub indexing_commands: Arc<IndexingCommands>,
+    pub model_queries: Arc<ModelQueries>,
 }

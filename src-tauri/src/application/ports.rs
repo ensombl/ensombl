@@ -30,7 +30,14 @@ pub trait GitWorktrees: Send + Sync {
     /// Local branch names.
     fn branches(&self, repo: &Path) -> Result<Vec<String>>;
     /// Adds a worktree at `path`. Creates `branch` from `base` when `create_branch` is set.
-    fn add(&self, repo: &Path, path: &Path, branch: &str, base: Option<&str>, create_branch: bool) -> Result<()>;
+    fn add(
+        &self,
+        repo: &Path,
+        path: &Path,
+        branch: &str,
+        base: Option<&str>,
+        create_branch: bool,
+    ) -> Result<()>;
     fn remove(&self, repo: &Path, path: &Path, force: bool) -> Result<()>;
 }
 
@@ -38,4 +45,63 @@ pub trait GitWorktrees: Send + Sync {
 pub trait SessionRepository: Send + Sync {
     fn get(&self) -> Result<Session>;
     fn update(&self, f: &mut dyn FnMut(&mut Session) -> Result<()>) -> Result<()>;
+}
+
+// Indexing
+
+use crate::domain::parsed::ParsedFile;
+
+/// A source file found in a worktree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceFile {
+    /// Repo-relative path with `/` separators.
+    pub path: String,
+    /// Workspace package the file belongs to.
+    pub package: String,
+}
+
+/// Lists indexable source files (respecting .gitignore) and reads them.
+pub trait SourceScanner: Send + Sync {
+    fn scan(&self, root: &Path) -> Result<Vec<SourceFile>>;
+    /// Package for a single path, used when files appear after the initial scan.
+    fn package_of(&self, root: &Path, path: &str) -> String;
+    fn is_source(&self, path: &str) -> bool;
+    fn read(&self, root: &Path, path: &str) -> Result<String>;
+}
+
+/// Turns one source file into symbols, imports and type references.
+pub trait SourceParser: Send + Sync {
+    /// Bumped whenever extraction changes so caches are invalidated.
+    fn version(&self) -> u32;
+    fn parse(&self, path: &str, package: &str, source: &str) -> Result<ParsedFile>;
+}
+
+/// Resolves import specifiers to repo-relative files within a worktree.
+pub trait ModuleResolver: Send + Sync {
+    fn resolve(&self, from: &str, specifier: &str) -> Option<String>;
+}
+
+/// Builds a resolver for a worktree (reads tsconfig paths, workspace packages, ...).
+pub trait ModuleResolverFactory: Send + Sync {
+    fn for_root(&self, root: &Path) -> Box<dyn ModuleResolver>;
+}
+
+/// Content-addressed cache of parse results, so reopening a worktree is fast.
+pub trait ParseCache: Send + Sync {
+    fn get(&self, worktree: &str, path: &str, hash: &str) -> Option<ParsedFile>;
+    fn put_many(&self, worktree: &str, entries: &[(String, ParsedFile)]);
+    fn forget(&self, worktree: &str, paths: &[String]);
+}
+
+/// Watches worktrees for source changes; changes are reported out-of-band.
+pub trait FileWatcher: Send + Sync {
+    fn watch(&self, worktree: &str, root: &Path) -> Result<()>;
+    fn unwatch(&self, worktree: &str);
+}
+
+/// Progress and change notifications for the UI.
+pub trait IndexEvents: Send + Sync {
+    fn progress(&self, worktree: &str, done: usize, total: usize);
+    /// The model changed; `changed` lists symbol ids that were added or modified.
+    fn updated(&self, worktree: &str, changed: &[String], removed: &[String]);
 }

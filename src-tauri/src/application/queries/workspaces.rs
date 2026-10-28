@@ -102,18 +102,30 @@ impl QueryHandler<GetSession> for WorkspaceQueries {
                     .tabs
                     .iter()
                     .filter(|t| t.project_id == project.id)
-                    .map(|t| TabView { worktree: t.clone(), label: t.label() })
+                    .map(|t| TabView {
+                        worktree: t.clone(),
+                        label: t.label(),
+                    })
                     .collect(),
             })
             .collect();
-        Ok(SessionView { groups, active: session.active })
+        Ok(SessionView {
+            groups,
+            active: session.active,
+        })
     }
 }
 
 impl QueryHandler<ListWorktrees> for WorkspaceQueries {
     fn handle(&self, q: ListWorktrees) -> Result<Vec<WorktreeListing>> {
         let root = self.root(&q.project_id)?;
-        let open: Vec<_> = self.sessions.get()?.tabs.into_iter().map(|t| t.id).collect();
+        let open: Vec<_> = self
+            .sessions
+            .get()?
+            .tabs
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
         Ok(self
             .git
             .list(Path::new(&root))?

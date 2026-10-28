@@ -1,5 +1,6 @@
 //! Interface layer: thin Tauri commands that dispatch to application
-//! handlers. No business logic lives here.
+//! handlers, and adapters that push application events to the frontend.
 
 pub mod commands;
+pub mod events;
 pub mod state;

@@ -113,7 +113,13 @@ impl Session {
     pub fn add_project(&mut self, id: ProjectId, name: String, root: String) -> ProjectId {
         if self.project(&id).is_none() {
             let color = GroupColor::next_free(self.projects.iter().map(|p| p.color));
-            self.projects.push(Project { id: id.clone(), name, root, color, collapsed: false });
+            self.projects.push(Project {
+                id: id.clone(),
+                name,
+                root,
+                color,
+                collapsed: false,
+            });
         }
         id
     }
@@ -156,7 +162,12 @@ impl Session {
                 .tabs
                 .get(index)
                 .filter(same_group)
-                .or_else(|| index.checked_sub(1).and_then(|i| self.tabs.get(i)).filter(same_group))
+                .or_else(|| {
+                    index
+                        .checked_sub(1)
+                        .and_then(|i| self.tabs.get(i))
+                        .filter(same_group)
+                })
                 .or_else(|| self.tabs.get(index.min(self.tabs.len().saturating_sub(1))))
                 .map(|t| t.id.clone());
         }
@@ -271,7 +282,10 @@ mod tests {
     #[test]
     fn opening_a_tab_for_an_unknown_project_fails() {
         let mut s = session();
-        assert_eq!(s.open_tab(wt("x", "nope")), Err(SessionError::UnknownProject("nope".into())));
+        assert_eq!(
+            s.open_tab(wt("x", "nope")),
+            Err(SessionError::UnknownProject("nope".into()))
+        );
     }
 
     #[test]

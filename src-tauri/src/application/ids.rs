@@ -17,7 +17,13 @@ pub fn folder_name(path: &Path) -> String {
 pub fn slug(branch: &str) -> String {
     let s: String = branch
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     s.trim_matches('-').to_string()
 }
