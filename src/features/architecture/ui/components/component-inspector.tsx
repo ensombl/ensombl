@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { ComponentOverride } from "@/shared/bindings/ComponentOverride"
@@ -142,7 +141,8 @@ export function ComponentInspector({ system, node, onNavigate, onShowCode, onClo
           <X />
         </Button>
       </header>
-      <ScrollArea className="min-h-0 flex-1">
+      {/* A plain overflow box: a ScrollArea can't size itself inside a max-height panel. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="grid gap-5 p-3 @2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <div className="min-w-0 space-y-4">
             {editable && (
@@ -284,7 +284,7 @@ export function ComponentInspector({ system, node, onNavigate, onShowCode, onClo
             )}
           </div>
         </div>
-      </ScrollArea>
+      </div>
     </aside>
   )
 }

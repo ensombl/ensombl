@@ -51,9 +51,11 @@ function EditorSettings() {
   )
 }
 
-export function PeekPanel({ target }: { target: PeekTarget }) {
+/** A file at a line; `onClose` defaults to closing the peek drawer. */
+export function PeekPanel({ target, onClose }: { target: PeekTarget; onClose?: () => void }) {
   const worktree = useWorkspace()
-  const { close } = usePeek()
+  const peek = usePeek()
+  const close = onClose ?? peek.close
   const source = useSource(worktree.id, target.file)
   const comments = useComments(worktree.id)
   const openInEditor = useOpenInEditor()

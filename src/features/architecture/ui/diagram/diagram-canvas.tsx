@@ -150,7 +150,7 @@ function Canvas({ model }: { model: ArchModel }) {
           source: e.source,
           target: e.target,
           type: "uml",
-          zIndex: touches ? 10 : 1,
+          zIndex: 0,
           data: {
             kind: e.kind,
             count: e.count,

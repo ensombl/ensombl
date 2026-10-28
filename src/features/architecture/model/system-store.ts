@@ -4,7 +4,7 @@ import { useWorkspace } from "@/shared/workspace/workspace-context"
 
 import { defaultFilters, type SystemFilters } from "./system-view"
 
-export type ArchitectureTab = "components" | "flows" | "boundaries" | "code"
+export type ArchitectureTab = "components" | "flows" | "boundaries" | "code" | "files"
 
 /** Architecture-pane UI state for one worktree tab. Client-only. */
 export interface SystemUiState {
@@ -16,9 +16,11 @@ export interface SystemUiState {
   filters: SystemFilters
   /** Entry point open in the Flows tab. */
   entry: string | null
+  /** File open in the Files tab. */
+  file: string | null
 }
 
-const initial = (): SystemUiState => ({ tab: "components", focus: null, selected: null, filters: defaultFilters(), entry: null })
+const initial = (): SystemUiState => ({ tab: "components", focus: null, selected: null, filters: defaultFilters(), entry: null, file: null })
 
 // One shared fallback so untouched tabs see a stable object (and stable memo deps).
 const DEFAULT = initial()
@@ -45,5 +47,6 @@ export function useSystemUi() {
     select: (selected: string | null) => set({ selected }),
     setFilters: (filters: Partial<SystemFilters>) => set({ filters: { ...state.filters, ...filters } }),
     openEntry: (entry: string | null) => set({ entry, tab: "flows" }),
+    openFile: (file: string | null) => set({ file }),
   }
 }

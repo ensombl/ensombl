@@ -29,6 +29,7 @@ use crate::application::cqrs::{CommandHandler, QueryHandler};
 use crate::application::ports::Settings;
 use crate::application::queries::architecture::{GetFlow, GetSystem, SystemView};
 use crate::application::queries::chats::ListChats;
+use crate::application::queries::files::ListFiles;
 use crate::application::queries::get_app_info::{AppInfo, GetAppInfo};
 use crate::application::queries::model::GetModel;
 use crate::application::queries::patterns::{GetPatterns, PatternView};
@@ -381,4 +382,9 @@ pub fn split_component(handlers: State<'_, Handlers>, input: SplitComponent) -> 
 #[tauri::command]
 pub fn set_rule_enabled(handlers: State<'_, Handlers>, input: SetRuleEnabled) -> Result<()> {
     handlers.architecture_commands.handle(input)
+}
+
+#[tauri::command]
+pub async fn list_files(handlers: State<'_, Handlers>, input: ListFiles) -> Result<Vec<String>> {
+    blocking(&handlers.file_queries, move |h| h.handle(input)).await
 }

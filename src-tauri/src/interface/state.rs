@@ -9,6 +9,7 @@ use crate::application::commands::terminals::TerminalCommands;
 use crate::application::commands::workspaces::WorkspaceCommands;
 use crate::application::queries::architecture::ArchitectureQueries;
 use crate::application::queries::chats::ChatQueries;
+use crate::application::queries::files::FileQueries;
 use crate::application::queries::get_app_info::GetAppInfoHandler;
 use crate::application::queries::model::ModelQueries;
 use crate::application::queries::patterns::PatternQueries;
@@ -28,6 +29,7 @@ pub struct Handlers {
     pub terminal_queries: Arc<TerminalQueries>,
     pub architecture_commands: Arc<ArchitectureCommands>,
     pub architecture_queries: Arc<ArchitectureQueries>,
+    pub file_queries: Arc<FileQueries>,
     pub chat_commands: Arc<ChatCommands>,
     pub chat_queries: Arc<ChatQueries>,
     pub pattern_commands: Arc<PatternCommands>,

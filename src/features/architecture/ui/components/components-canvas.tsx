@@ -45,7 +45,7 @@ const nodeTypes = { component: ComponentNodeView, feature: FeatureNodeView, lane
 const edgeTypes = { system: SystemEdgeView }
 
 /** Edge labels are drawn for every edge only when the view is this small. */
-const LABEL_ALL_EDGES = 40
+const LABEL_ALL_EDGES = 12
 /** Viewport culling kicks in above this many nodes. */
 const CULL_ABOVE = 150
 
@@ -197,7 +197,8 @@ function Canvas({ system, onShowCode }: CanvasProps) {
           source: e.source,
           target: e.target,
           type: "system",
-          zIndex: highlighted ? 10 : 1,
+          // Below the boxes, always: lines never cover component names.
+          zIndex: 0,
           data: {
             kind: e.kind,
             members: e.members,

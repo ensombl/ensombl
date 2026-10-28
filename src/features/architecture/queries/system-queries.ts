@@ -26,3 +26,13 @@ export function useFlow(worktreeId: string, entryId: string | null, depth: numbe
     enabled: !!entryId,
   })
 }
+
+/** Every non-ignored file in the worktree, for the explorer. */
+export function useFiles(worktreeId: string, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: [...systemKeys.all, worktreeId, "files"],
+    queryFn: () => query<string[]>("list_files", { input: { worktreeId } }),
+    staleTime: 30_000,
+  })
+}

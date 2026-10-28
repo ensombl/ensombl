@@ -6,6 +6,8 @@ import { roundedPath } from "../../layout/paths"
 import { membersLabel, type ComponentsViewEdge } from "../../model/system-view"
 import { KIND_STYLE, markerFor } from "./system-style"
 
+const MIN_LABEL_ROOM = 120
+
 export type SystemFlowEdge = Edge<
   {
     kind: ComponentsViewEdge["kind"]
@@ -32,10 +34,10 @@ export const SystemEdgeView = memo(function SystemEdgeView({
   data,
 }: EdgeProps<SystemFlowEdge>) {
   const points = data?.points
-  const [path, labelX, labelY] =
+  const [path, labelX, labelY, room] =
     points && points.length >= 2
       ? roundedPath(points)
-      : getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 10 })
+      : [...getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 10 }).slice(0, 3), Infinity] as [string, number, number, number]
   const kind = data?.kind ?? "call"
   const style = KIND_STYLE[kind]
   const count = data?.count ?? 1
@@ -55,11 +57,12 @@ export const SystemEdgeView = memo(function SystemEdgeView({
           strokeDasharray: style.dash,
         }}
       />
-      {label && (data?.showLabel || data?.highlighted) && (
+      {/* Only where the segment has room, so labels never sit on boxes or arrowheads. */}
+      {label && (data?.showLabel || data?.highlighted) && room >= MIN_LABEL_ROOM && (
         <EdgeLabelRenderer>
           <div
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
-            className="pointer-events-none absolute max-w-48 truncate rounded border bg-background/95 px-1.5 py-px font-mono text-[10px] text-foreground"
+            className="pointer-events-none absolute max-w-44 truncate rounded border bg-background px-1.5 py-px font-mono text-[10px] text-foreground"
           >
             {label}
           </div>

@@ -1,4 +1,4 @@
-import { Code2, Loader2, Network, RefreshCw, Route, ShieldCheck, Waypoints } from "lucide-react"
+import { Code2, FolderTree, Loader2, Network, RefreshCw, Route, ShieldCheck, Waypoints } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -16,6 +16,7 @@ import { useSystem } from "../queries/system-queries"
 import { ComponentsCanvas } from "./components/components-canvas"
 import { BoundariesView } from "./boundaries/boundaries-view"
 import { DiagramCanvas } from "./diagram/diagram-canvas"
+import { FilesView } from "./files/files-view"
 import { FlowsView } from "./flows/flows-view"
 
 const TABS: { value: ArchitectureTab; label: string; icon: typeof Network }[] = [
@@ -23,6 +24,7 @@ const TABS: { value: ArchitectureTab; label: string; icon: typeof Network }[] = 
   { value: "flows", label: "Flows", icon: Route },
   { value: "boundaries", label: "Boundaries", icon: ShieldCheck },
   { value: "code", label: "Code", icon: Code2 },
+  { value: "files", label: "Files", icon: FolderTree },
 ]
 
 function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string }) {
@@ -65,6 +67,11 @@ function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string })
       <TabsContent value="code" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
         <ErrorBoundary resetKey={model}>
           <DiagramCanvas model={model} />
+        </ErrorBoundary>
+      </TabsContent>
+      <TabsContent value="files" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
+        <ErrorBoundary resetKey={worktreeId}>
+          <FilesView />
         </ErrorBoundary>
       </TabsContent>
       <div className="flex h-10 shrink-0 items-center border-t px-2">

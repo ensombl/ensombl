@@ -3,7 +3,6 @@ import { AtSign, FileCode2, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { usePeek } from "@/features/peek/model/peek-store"
 import { cn } from "@/lib/utils"
@@ -134,7 +133,8 @@ export function SymbolInspector({ model, symbol, onNavigate, onClose }: SymbolIn
           <X />
         </Button>
       </header>
-      <ScrollArea className="min-h-0 flex-1">
+      {/* A plain overflow box: a ScrollArea can't size itself inside a max-height panel. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="px-4 pt-3">
           <Button
             variant="outline"
@@ -189,7 +189,7 @@ export function SymbolInspector({ model, symbol, onNavigate, onClose }: SymbolIn
             ))}
           </Section>
         )}
-      </ScrollArea>
+      </div>
     </aside>
   )
 }
