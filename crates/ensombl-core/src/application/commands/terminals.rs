@@ -10,7 +10,7 @@ use ts_rs::TS;
 
 use crate::application::cqrs::{Command, CommandHandler};
 use crate::application::ports::{
-    PtyControl, PtySpawner, SessionRepository, ShellEnvironment, SpawnSpec, TerminalSink,
+    PtyControl, PtySpawner, ShellEnvironment, SpawnSpec, TerminalSink, WorktreeResolver,
 };
 use crate::application::{Error, Result};
 use crate::domain::terminal::{AgentProfile, Scrollback, TerminalId, TerminalInfo};
@@ -147,7 +147,7 @@ impl TerminalRegistry {
 }
 
 pub struct TerminalCommands {
-    sessions: Arc<dyn SessionRepository>,
+    worktrees: Arc<dyn WorktreeResolver>,
     shell: Arc<dyn ShellEnvironment>,
     spawner: Arc<dyn PtySpawner>,
     registry: Arc<TerminalRegistry>,
@@ -156,14 +156,14 @@ pub struct TerminalCommands {
 
 impl TerminalCommands {
     pub fn new(
-        sessions: Arc<dyn SessionRepository>,
+        worktrees: Arc<dyn WorktreeResolver>,
         shell: Arc<dyn ShellEnvironment>,
         spawner: Arc<dyn PtySpawner>,
         registry: Arc<TerminalRegistry>,
         profiles: Vec<AgentProfile>,
     ) -> Self {
         Self {
-            sessions,
+            worktrees,
             shell,
             spawner,
             registry,
@@ -221,13 +221,7 @@ struct Launch {
 
 impl TerminalCommands {
     fn worktree_path(&self, worktree_id: &str) -> Result<PathBuf> {
-        self.sessions
-            .get()?
-            .tabs
-            .iter()
-            .find(|t| t.id == worktree_id)
-            .map(|t| PathBuf::from(&t.path))
-            .ok_or_else(|| Error::Invalid(format!("worktree {worktree_id} isn't open")))
+        self.worktrees.root(worktree_id)
     }
 
     fn launch(&self, launch: Launch, sink: Arc<dyn TerminalSink>) -> Result<TerminalInfo> {
@@ -384,6 +378,8 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::*;
+    use crate::application::ports::SessionRepository;
+    use crate::application::worktrees::Worktrees;
     use crate::domain::workspace::{Session, Worktree};
 
     struct Sessions(Session);
@@ -466,7 +462,7 @@ mod tests {
         let spawner = Arc::new(FakeSpawner::default());
         let registry = Arc::new(TerminalRegistry::default());
         let cmds = TerminalCommands::new(
-            Arc::new(Sessions(session)),
+            Arc::new(Worktrees::new(Arc::new(Sessions(session)), None)),
             Arc::new(FakeShell),
             spawner.clone(),
             registry.clone(),
