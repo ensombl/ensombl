@@ -10,7 +10,7 @@ export function Welcome() {
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
-      <img src={logo} alt="CRM" className="size-24" draggable={false} />
+      <img src={logo} alt="ensombl" className="size-24" draggable={false} />
       <div className="space-y-1">
         <p className="text-sm font-medium">Add a project to get started</p>
         <p className="max-w-xs text-sm text-muted-foreground">

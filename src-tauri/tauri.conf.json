@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "CRM",
+  "productName": "ensombl",
+  "mainBinaryName": "ensombl",
   "version": "0.1.0",
   "identifier": "io.ensombl.crm",
   "build": {
@@ -13,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "CRM",
+        "title": "ensombl",
         "width": 1440,
         "height": 900,
         "minWidth": 900,
@@ -41,7 +42,7 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Clanker Resource Management",
+    "shortDescription": "Where clankers come together",
     "longDescription": "An architecture-first editor for coding agents: a live UML of your codebase next to Claude Code, Codex and friends.",
     "copyright": "© ensombl",
     "macOS": {

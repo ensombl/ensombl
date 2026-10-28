@@ -5,7 +5,7 @@ pub struct CargoBuildInfo;
 
 impl BuildInfo for CargoBuildInfo {
     fn name(&self) -> &str {
-        "CRM"
+        "ensombl"
     }
 
     fn version(&self) -> &str {
