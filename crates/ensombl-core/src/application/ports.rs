@@ -314,3 +314,8 @@ pub trait RunLog: Send + Sync {
     fn append(&self, run_id: &str, event: &crate::domain::agent_run::RunEvent) -> Result<()>;
     fn read(&self, run_id: &str) -> Result<Vec<crate::domain::agent_run::RunEvent>>;
 }
+
+/// Wall-clock time in ms since the epoch; faked in tests.
+pub trait Clock: Send + Sync {
+    fn now(&self) -> u64;
+}

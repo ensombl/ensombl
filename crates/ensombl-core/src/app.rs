@@ -1,6 +1,7 @@
 //! Composition root shared by every shell: wires adapters into handlers.
 //! A shell supplies where data lives and how events leave the process.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, mpsc};
 
@@ -11,35 +12,43 @@ use crate::application::commands::architecture::ArchitectureCommands;
 use crate::application::commands::indexing::{IndexingCommands, IndexingPorts, ReindexPaths};
 use crate::application::commands::patterns::PatternCommands;
 use crate::application::commands::review::ReviewCommands;
+use crate::application::commands::tasks::{TaskCommands, TaskPorts};
 use crate::application::commands::terminals::{TerminalCommands, TerminalRegistry};
 use crate::application::commands::workspaces::WorkspaceCommands;
 use crate::application::cqrs::CommandHandler;
 use crate::application::index_registry::IndexRegistry;
-use crate::application::ports::{EventBus, IndexEvents, ShellEnvironment, SourceScanner};
+use crate::application::ports::{
+    AgentRuntime, EventBus, IndexEvents, ShellEnvironment, SourceScanner,
+};
 use crate::application::queries::architecture::ArchitectureQueries;
 use crate::application::queries::files::FileQueries;
 use crate::application::queries::get_app_info::GetAppInfoHandler;
 use crate::application::queries::model::ModelQueries;
 use crate::application::queries::patterns::PatternQueries;
 use crate::application::queries::review::ReviewQueries;
+use crate::application::queries::tasks::TaskQueries;
 use crate::application::queries::terminals::TerminalQueries;
 use crate::application::queries::workspaces::WorkspaceQueries;
 use crate::application::worktrees::Worktrees;
 use crate::application::{Error, Result};
 use crate::domain::model::ModelDelta;
-use crate::domain::terminal::AgentProfile;
+use crate::domain::terminal::{AgentKind, AgentProfile};
 use crate::infrastructure::build_info::CargoBuildInfo;
+use crate::infrastructure::claude_headless::ClaudeCode;
 use crate::infrastructure::fs_scanner::FsScanner;
 use crate::infrastructure::git_cli::GitCli;
 use crate::infrastructure::json_architecture::JsonArchitecture;
 use crate::infrastructure::json_comments::{JsonComments, JsonSettings};
 use crate::infrastructure::json_decisions::JsonDecisions;
 use crate::infrastructure::json_sessions::JsonSessions;
+use crate::infrastructure::jsonl_run_log::JsonlRunLog;
 use crate::infrastructure::login_shell::LoginShell;
 use crate::infrastructure::native_pty::NativePty;
 use crate::infrastructure::notify_watcher::{ChangeBatch, NotifyWatcher};
 use crate::infrastructure::shell_launcher::ShellLauncher;
 use crate::infrastructure::sqlite_cache::SqliteCache;
+use crate::infrastructure::sqlite_tasks::SqliteTasks;
+use crate::infrastructure::system_clock::SystemClock;
 use crate::infrastructure::ts_parser::TreeSitterParser;
 use crate::infrastructure::ts_resolver::TsResolverFactory;
 
@@ -51,6 +60,9 @@ pub struct AppPaths {
     /// New git worktrees go under here.
     pub worktrees_dir: PathBuf,
 }
+
+/// Orchestrated tasks running at once, unless a shell says otherwise.
+pub const DEFAULT_CONCURRENCY: usize = 3;
 
 pub const INDEX_PROGRESS: &str = "index://progress";
 pub const MODEL_UPDATED: &str = "index://updated";
@@ -119,6 +131,8 @@ pub struct Handlers {
     pub pattern_queries: Arc<PatternQueries>,
     pub review_commands: Arc<ReviewCommands>,
     pub review_queries: Arc<ReviewQueries>,
+    pub task_commands: Arc<TaskCommands>,
+    pub task_queries: Arc<TaskQueries>,
 }
 
 /// A wired-up instance.
@@ -135,6 +149,8 @@ impl Core {
         } = paths;
         std::fs::create_dir_all(&data_dir)?;
         let sessions = Arc::new(JsonSessions::open(data_dir.join("session.json")));
+        let tasks = Arc::new(SqliteTasks::open(&data_dir.join("orchestrator.db"))?);
+        let run_log = Arc::new(JsonlRunLog::new(data_dir.join("runs")));
         let git = Arc::new(GitCli);
 
         let scanner = Arc::new(FsScanner);
@@ -155,7 +171,7 @@ impl Core {
                         .map_err(|e| Error::Storage(e.to_string()))?,
                 ),
                 watcher: Arc::new(NotifyWatcher::new(changes_tx, is_source)),
-                events: Arc::new(BusIndexEvents(bus)),
+                events: Arc::new(BusIndexEvents(bus.clone())),
             },
             registry.clone(),
         ));
@@ -176,7 +192,7 @@ impl Core {
         let profiles = AgentProfile::builtin();
 
         let terminal_commands = Arc::new(TerminalCommands::new(
-            Arc::new(Worktrees::new(sessions.clone(), None)),
+            Arc::new(Worktrees::new(sessions.clone(), Some(tasks.clone()))),
             shell.clone(),
             Arc::new(NativePty),
             terminals.clone(),
@@ -184,6 +200,30 @@ impl Core {
         ));
         let comments = Arc::new(JsonComments::open(data_dir.join("comments.json")));
         let settings = Arc::new(JsonSettings::open(data_dir.join("settings.json")));
+
+        let mut runtimes: HashMap<AgentKind, Arc<dyn AgentRuntime>> = HashMap::new();
+        runtimes.insert(AgentKind::Claude, Arc::new(ClaudeCode));
+        let task_commands = Arc::new(TaskCommands::new(TaskPorts {
+            tasks: tasks.clone(),
+            log: run_log.clone(),
+            runtimes,
+            sessions: sessions.clone(),
+            shell: shell.clone(),
+            git: git.clone(),
+            task_git: git.clone(),
+            bus,
+            clock: Arc::new(SystemClock),
+            worktrees_dir: worktrees_dir.clone(),
+            concurrency: DEFAULT_CONCURRENCY,
+        }));
+        task_commands.recover()?;
+        task_commands.dispatch();
+        let task_queries = Arc::new(TaskQueries::new(
+            tasks,
+            run_log,
+            sessions.clone(),
+            git.clone(),
+        ));
 
         let handlers = Handlers {
             get_app_info: GetAppInfoHandler::new(Arc::new(CargoBuildInfo)),
@@ -223,6 +263,8 @@ impl Core {
                 terminal_commands,
             )),
             review_queries: Arc::new(ReviewQueries::new(sessions, comments, settings)),
+            task_commands,
+            task_queries,
         };
         Ok(Core {
             handlers: Arc::new(handlers),
@@ -233,5 +275,6 @@ impl Core {
     /// Stops every agent process this instance started.
     pub fn shutdown(&self) {
         self.terminals.kill_all();
+        self.handlers.task_commands.shutdown();
     }
 }
