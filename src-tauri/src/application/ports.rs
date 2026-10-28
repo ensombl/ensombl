@@ -69,6 +69,12 @@ pub trait SourceScanner: Send + Sync {
     fn read(&self, root: &Path, path: &str) -> Result<String>;
 }
 
+/// Every file in a worktree that isn't ignored, for the file explorer.
+pub trait FileLister: Send + Sync {
+    /// Repo-relative paths with `/` separators, sorted; at most `limit`.
+    fn list(&self, root: &Path, limit: usize) -> Result<Vec<String>>;
+}
+
 /// Turns one source file into symbols, imports and type references.
 pub trait SourceParser: Send + Sync {
     /// Bumped whenever extraction changes so caches are invalidated.

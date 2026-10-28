@@ -6,7 +6,7 @@ use std::path::Path;
 use ignore::WalkBuilder;
 
 use crate::application::Result;
-use crate::application::ports::{SourceFile, SourceScanner};
+use crate::application::ports::{FileLister, SourceFile, SourceScanner};
 
 const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
 const SKIP_DIRS: &[&str] = &[
@@ -69,6 +69,29 @@ fn read_package_name(dir: &Path) -> Option<String> {
     let bytes = std::fs::read(dir.join("package.json")).ok()?;
     let json: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
     json.get("name")?.as_str().map(str::to_string)
+}
+
+impl FileLister for FsScanner {
+    fn list(&self, root: &Path, limit: usize) -> Result<Vec<String>> {
+        let walker = WalkBuilder::new(root)
+            .hidden(false)
+            .git_ignore(true)
+            .git_exclude(true)
+            .require_git(false)
+            .filter_entry(|e| {
+                let name = e.file_name().to_string_lossy();
+                name != ".git" && !SKIP_DIRS.contains(&name.as_ref())
+            })
+            .build();
+        let mut files: Vec<String> = walker
+            .flatten()
+            .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+            .filter_map(|e| to_rel(root, e.path()))
+            .take(limit)
+            .collect();
+        files.sort();
+        Ok(files)
+    }
 }
 
 impl SourceScanner for FsScanner {
@@ -134,6 +157,20 @@ mod tests {
         let p = root.join(rel);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, contents).unwrap();
+    }
+
+    #[test]
+    fn lists_every_file_that_isnt_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, ".gitignore", "dist/\n");
+        write(root, "README.md", "");
+        write(root, "src/a.ts", "");
+        write(root, "dist/out.js", "");
+        write(root, "node_modules/x/index.js", "");
+        let files = FsScanner.list(root, 100).unwrap();
+        assert_eq!(files, [".gitignore", "README.md", "src/a.ts"]);
+        assert_eq!(FsScanner.list(root, 1).unwrap().len(), 1);
     }
 
     #[test]

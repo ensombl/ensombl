@@ -20,6 +20,7 @@ use application::index_registry::IndexRegistry;
 use application::ports::{AgentRuntime, ShellEnvironment, SourceScanner};
 use application::queries::architecture::ArchitectureQueries;
 use application::queries::chats::ChatQueries;
+use application::queries::files::FileQueries;
 use application::queries::get_app_info::GetAppInfoHandler;
 use application::queries::model::ModelQueries;
 use application::queries::patterns::PatternQueries;
@@ -143,6 +144,7 @@ pub fn run() {
                     registry,
                     decisions,
                 )),
+                file_queries: Arc::new(FileQueries::new(sessions.clone(), Arc::new(FsScanner))),
                 chat_commands,
                 chat_queries: Arc::new(ChatQueries::new(chats)),
                 terminal_commands: terminal_commands.clone(),
@@ -204,6 +206,7 @@ pub fn run() {
             cmd::merge_components,
             cmd::split_component,
             cmd::set_rule_enabled,
+            cmd::list_files,
             cmd::list_chats,
             cmd::start_chat,
             cmd::attach_chat,

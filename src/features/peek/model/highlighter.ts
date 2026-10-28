@@ -14,10 +14,14 @@ function languageFor(path: string): (typeof LANGS)[number] {
   return "typescript"
 }
 
-/** Syntax-highlighted lines of a file (lazily loads the grammars once). */
+const isScript = (path: string) => /\.[cm]?[jt]sx?$/.test(path)
+
+/** Syntax-highlighted lines of a file; other languages load on demand, unknown ones stay plain. */
 export async function highlightLines(path: string, code: string): Promise<ThemedToken[][]> {
   const h = await getHighlighter()
-  return h.codeToTokens(code, { lang: languageFor(path), theme: THEME }).tokens
+  if (isScript(path)) return h.codeToTokens(code, { lang: languageFor(path), theme: THEME }).tokens
+  const tokens = await highlightSnippet(code, languageOfPath(path))
+  return tokens ?? code.split("\n").map((line) => [{ content: line, offset: 0 } as ThemedToken])
 }
 
 const EXTENSIONS: Record<string, string> = { ts: "typescript", js: "javascript", py: "python", rs: "rust", sh: "bash", md: "markdown", yml: "yaml" }

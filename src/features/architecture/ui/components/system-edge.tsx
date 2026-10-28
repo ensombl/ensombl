@@ -13,7 +13,8 @@ export type SystemFlowEdge = Edge<
     count: number
     highlighted: boolean
     dimmed: boolean
-    showLabel: boolean
+    /** The pointer is on this edge: show what it carries. */
+    hovered: boolean
     /** Lots of edges on screen: draw the rest faintly so highlighted ones read. */
     busy: boolean
     points?: Point[]
@@ -50,16 +51,17 @@ export const SystemEdgeView = memo(function SystemEdgeView({
         markerEnd={`url(#${markerFor(kind)})`}
         style={{
           stroke: style.color,
-          strokeOpacity: data?.highlighted ? 1 : data?.dimmed ? 0.08 : data?.busy ? 0.22 : 0.55,
-          strokeWidth: data?.highlighted ? width + 0.75 : width,
+          strokeOpacity: data?.highlighted || data?.hovered ? 1 : data?.dimmed ? 0.08 : data?.busy ? 0.22 : 0.55,
+          strokeWidth: data?.highlighted || data?.hovered ? width + 0.75 : width,
           strokeDasharray: style.dash,
         }}
       />
-      {label && (data?.showLabel || data?.highlighted) && (
+      {/* One label at a time, for the hovered edge; the inspector lists them all. */}
+      {label && data?.hovered && (
         <EdgeLabelRenderer>
           <div
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
-            className="pointer-events-none absolute max-w-48 truncate rounded border bg-background/95 px-1.5 py-px font-mono text-[10px] text-foreground"
+            className="pointer-events-none absolute max-w-44 truncate rounded border bg-background px-1.5 py-px font-mono text-[10px] text-foreground"
           >
             {label}
           </div>
