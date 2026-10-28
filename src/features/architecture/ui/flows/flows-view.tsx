@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { DoorOpen, Loader2, Route } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
@@ -17,6 +18,20 @@ import { useFlow } from "../../queries/system-queries"
 import { SequenceDiagram } from "./sequence-diagram"
 
 const DEPTHS = [2, 4, 6, 8, 10]
+
+const VERB_COLOR: Record<string, string> = {
+  GET: "text-sky-300",
+  POST: "text-emerald-300",
+  PUT: "text-amber-300",
+  PATCH: "text-amber-300",
+  DELETE: "text-red-300",
+}
+
+/** `POST /claims/:id` → verb and path; other labels have no verb. */
+function splitLabel(label: string): { verb: string | null; rest: string } {
+  const match = /^([A-Z]+) (\/.*)$/.exec(label)
+  return match ? { verb: match[1], rest: match[2] } : { verb: null, rest: label }
+}
 
 /** Pick an entry point, see what it sets in motion across components. */
 export function FlowsView({ system }: { system: SystemView }) {
@@ -35,8 +50,8 @@ export function FlowsView({ system }: { system: SystemView }) {
   const peek = (file: string, line: number) => openPeek(worktree.id, { file, line, title: file.split("/").pop() ?? file })
 
   return (
-    <div className="flex h-full">
-      <aside className="flex w-72 shrink-0 flex-col border-r">
+    <ResizablePanelGroup orientation="horizontal" className="h-full">
+      <ResizablePanel defaultSize="34" minSize="20" maxSize="70" className="flex flex-col">
         <div className="border-b p-2">
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter routes, events, jobs…" className="h-8 text-xs" />
         </div>
@@ -47,30 +62,38 @@ export function FlowsView({ system }: { system: SystemView }) {
                 <h3 className="px-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                   {g.label} <span className="font-normal">({g.entries.length})</span>
                 </h3>
-                {g.entries.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    onClick={() => ui.openEntry(e.id)}
-                    className={cn(
-                      "flex w-full flex-col rounded-md px-1.5 py-1 text-left hover:bg-accent",
-                      e.id === entryId && "bg-accent text-accent-foreground",
-                    )}
-                  >
-                    <span className="truncate font-mono text-xs">{e.label}</span>
-                    <span className="truncate text-[11px] text-muted-foreground">
-                      {nameOf(e.node)}
-                      {e.member && `.${e.member}`}
-                    </span>
-                  </button>
-                ))}
+                {g.entries.map((e) => {
+                  const { verb, rest } = splitLabel(e.label)
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => ui.openEntry(e.id)}
+                      title={`${e.label}\n${e.site.file}:${e.site.line}`}
+                      className={cn(
+                        "flex w-full gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-accent",
+                        e.id === entryId && "bg-accent text-accent-foreground",
+                      )}
+                    >
+                      {verb && <span className={cn("w-12 shrink-0 pt-px font-mono text-[10px] font-semibold", VERB_COLOR[verb])}>{verb}</span>}
+                      <span className="min-w-0 space-y-0.5">
+                        <span className="block font-mono text-xs break-all">{rest}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {nameOf(e.node)}
+                          {e.member && `.${e.member}`}
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             ))}
             {groups.length === 0 && <p className="p-2 text-xs text-muted-foreground">No entry points found.</p>}
           </div>
         </ScrollArea>
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
+      </ResizablePanel>
+      <ResizableHandle />
+      <ResizablePanel minSize="30" className="flex min-w-0 flex-col">
         {!entry ? (
           <PaneEmpty icon={<Route />} title="Pick an entry point" description="See the calls, events and requests it sets off, component by component." />
         ) : (
@@ -99,7 +122,7 @@ export function FlowsView({ system }: { system: SystemView }) {
                 </Select>
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-auto p-4">
+            <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
               {sequence && sequence.rows.length === 0 && (
                 <p className="text-sm text-muted-foreground">No calls to other components were found from here.</p>
               )}
@@ -107,7 +130,7 @@ export function FlowsView({ system }: { system: SystemView }) {
             </div>
           </>
         )}
-      </div>
-    </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   )
 }

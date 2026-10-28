@@ -7,7 +7,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import type { ComponentOverride } from "@/shared/bindings/ComponentOverride"
 import type { Interaction } from "@/shared/bindings/Interaction"
@@ -124,7 +123,7 @@ export function ComponentInspector({ system, node, onNavigate, onShowCode, onClo
   const peek = (file: string, line: number) => openPeek(worktree.id, { file, line, title: file.split("/").pop() ?? file })
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l bg-background">
+    <aside className="@container absolute inset-x-3 bottom-3 z-20 flex max-h-[48%] flex-col overflow-hidden rounded-xl border bg-popover/95 text-popover-foreground shadow-lg backdrop-blur">
       <header className="flex items-center gap-2 border-b p-2 pl-3">
         <NodeIcon node={node} className="size-4 shrink-0" />
         {editable ? (
@@ -144,140 +143,146 @@ export function ComponentInspector({ system, node, onNavigate, onShowCode, onClo
         </Button>
       </header>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-5 p-3">
-          {editable && (
-            <div className="grid grid-cols-2 gap-2">
-              <Select value={node.role} onValueChange={(role) => save({ role: role as Role })}>
-                <SelectTrigger size="sm" className="h-8 w-full text-xs" aria-label="Role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r} value={r} className="text-xs">
-                      {ROLE_LABEL[r]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={node.layer} onValueChange={(layer) => save({ layer: layer as Layer })}>
-                <SelectTrigger size="sm" className="h-8 w-full text-xs" aria-label="Layer">
-                  <span className="size-2 rounded-full" style={{ background: LAYER_COLOR[node.layer] }} />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LAYERS.map((l) => (
-                    <SelectItem key={l} value={l} className="text-xs">
-                      {LAYER_LABEL[l]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                value={feature}
-                onChange={(e) => setFeature(e.target.value)}
-                onBlur={() => feature.trim() && feature !== node.feature && save({ feature: feature.trim() })}
-                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                className="col-span-2 h-8 text-xs"
-                aria-label="Feature"
-                placeholder="Feature"
-              />
-            </div>
-          )}
-
-          <Section title="Description">
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={() => description !== (node.description ?? "") && save({ description: description.trim() || undefined })}
-              placeholder="What is this responsible for? Agents see this when you tag it."
-              className="min-h-20 text-sm"
-            />
-          </Section>
-
-          <div className="flex flex-wrap gap-1.5">
-            {node.symbolIds.length > 0 && (
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onShowCode(node.symbolIds[0])}>
-                <Code2 /> Show code
-              </Button>
-            )}
+        <div className="grid gap-5 p-3 @2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <div className="min-w-0 space-y-4">
             {editable && (
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => save({ hidden: !node.hidden })}>
-                {node.hidden ? <Eye /> : <EyeOff />} {node.hidden ? "Show" : "Hide"}
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={node.role} onValueChange={(role) => save({ role: role as Role })}>
+                  <SelectTrigger size="sm" className="h-8 w-full text-xs" aria-label="Role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((r) => (
+                      <SelectItem key={r} value={r} className="text-xs">
+                        {ROLE_LABEL[r]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={node.layer} onValueChange={(layer) => save({ layer: layer as Layer })}>
+                  <SelectTrigger size="sm" className="h-8 w-full text-xs" aria-label="Layer">
+                    <span className="size-2 rounded-full" style={{ background: LAYER_COLOR[node.layer] }} />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LAYERS.map((l) => (
+                      <SelectItem key={l} value={l} className="text-xs">
+                        {LAYER_LABEL[l]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={feature}
+                  onChange={(e) => setFeature(e.target.value)}
+                  onBlur={() => feature.trim() && feature !== node.feature && save({ feature: feature.trim() })}
+                  onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                  className="col-span-2 h-8 text-xs"
+                  aria-label="Feature"
+                  placeholder="Feature"
+                />
+              </div>
             )}
-            {node.merged.length > 0 && (
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => split.mutate(node.id, { onSuccess: onClose })}>
-                <Split /> Split
-              </Button>
-            )}
-            {system.overrides.components[node.id] && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 text-xs"
-                onClick={() => update.mutate({ componentId: node.id, value: { hidden: false } })}
-              >
-                <RotateCcw /> Reset
-              </Button>
-            )}
+
+            <Section title="Description">
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onBlur={() => description !== (node.description ?? "") && save({ description: description.trim() || undefined })}
+                placeholder="What is this responsible for? Agents see this when you tag it."
+                className="min-h-20 text-sm"
+              />
+            </Section>
+
+            <div className="flex flex-wrap gap-1.5">
+              {node.symbolIds.length > 0 && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onShowCode(node.symbolIds[0])}>
+                  <Code2 /> Show code
+                </Button>
+              )}
+              {editable && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => save({ hidden: !node.hidden })}>
+                  {node.hidden ? <Eye /> : <EyeOff />} {node.hidden ? "Show" : "Hide"}
+                </Button>
+              )}
+              {node.merged.length > 0 && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => split.mutate(node.id, { onSuccess: onClose })}>
+                  <Split /> Split
+                </Button>
+              )}
+              {system.overrides.components[node.id] && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => update.mutate({ componentId: node.id, value: { hidden: false } })}
+                >
+                  <RotateCcw /> Reset
+                </Button>
+              )}
           </div>
 
-          {node.merged.length > 0 && (
-            <Section title={`Merged from ${node.merged.length}`}>
-              <p className="text-xs text-muted-foreground">{node.merged.map((id) => id.split("#").pop()).join(", ")}</p>
-            </Section>
-          )}
-
-          {entries.length > 0 && (
-            <Section title={`Entry points (${entries.length})`}>
-              <div className="space-y-1">
-                {entries.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    onClick={() => ui.openEntry(e.id)}
-                    className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-accent"
-                  >
-                    <DoorOpen className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate font-mono">{e.label}</span>
-                  </button>
-                ))}
-              </div>
-            </Section>
-          )}
-
-          {outgoing.length > 0 && (
-            <Section title={`Talks to (${outgoing.length})`}>
-              <div className="space-y-1.5">
-                {outgoing.map((i) => (
-                  <InteractionRow key={i.id} interaction={i} other={byId.get(i.to)} onNavigate={onNavigate} onSite={peek} />
-                ))}
-              </div>
-            </Section>
-          )}
-          {incoming.length > 0 && (
-            <Section title={`Used by (${incoming.length})`}>
-              <div className="space-y-1.5">
-                {incoming.map((i) => (
-                  <InteractionRow key={i.id} interaction={i} other={byId.get(i.from)} onNavigate={onNavigate} onSite={peek} />
-                ))}
-              </div>
-            </Section>
-          )}
-
           {node.file && (
-            <>
-              <Separator />
-              <button
-                type="button"
-                onClick={() => peek(node.file!, node.line ?? 1)}
-                className="block w-full truncate text-left font-mono text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                {node.file}
-                {node.line ? `:${node.line}` : ""}
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => peek(node.file!, node.line ?? 1)}
+              className="block w-full truncate text-left font-mono text-[11px] text-muted-foreground hover:text-foreground"
+              title={node.file}
+            >
+              {node.file}
+              {node.line ? `:${node.line}` : ""}
+            </button>
           )}
+          </div>
+
+          <div className="min-w-0 space-y-4">
+            {node.merged.length > 0 && (
+              <Section title={`Merged from ${node.merged.length}`}>
+                <p className="text-xs text-muted-foreground">{node.merged.map((id) => id.split("#").pop()).join(", ")}</p>
+              </Section>
+            )}
+
+            {entries.length > 0 && (
+              <Section title={`Entry points (${entries.length})`}>
+                <div className="space-y-1">
+                  {entries.map((e) => (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => ui.openEntry(e.id)}
+                      className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-accent"
+                    >
+                      <DoorOpen className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-mono">{e.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </Section>
+            )}
+
+            {outgoing.length > 0 && (
+              <Section title={`Talks to (${outgoing.length})`}>
+                <div className="space-y-1.5">
+                  {outgoing.map((i) => (
+                    <InteractionRow key={i.id} interaction={i} other={byId.get(i.to)} onNavigate={onNavigate} onSite={peek} />
+                  ))}
+                </div>
+              </Section>
+            )}
+            {incoming.length > 0 && (
+              <Section title={`Used by (${incoming.length})`}>
+                <div className="space-y-1.5">
+                  {incoming.map((i) => (
+                    <InteractionRow key={i.id} interaction={i} other={byId.get(i.from)} onNavigate={onNavigate} onSite={peek} />
+                  ))}
+                </div>
+              </Section>
+            )}
+
+            {entries.length === 0 && outgoing.length === 0 && incoming.length === 0 && (
+              <p className="text-xs text-muted-foreground">No interactions found for this component.</p>
+            )}
+          </div>
         </div>
       </ScrollArea>
     </aside>

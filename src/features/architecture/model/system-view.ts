@@ -26,7 +26,8 @@ export const defaultFilters = (): SystemFilters => ({
   showHidden: false,
   showExternal: true,
   showChannels: true,
-  kinds: ALL_KINDS,
+  // Injection mostly duplicates calls and doubles the lines.
+  kinds: ALL_KINDS.filter((k) => k !== "inject"),
 })
 
 /** Shown as components without the overview step when this small. */

@@ -54,6 +54,9 @@ function Canvas({ system, onShowCode }: CanvasProps) {
   const [multi, setMulti] = useState<string[]>([])
   const [mergeName, setMergeName] = useState("")
   const [searchOpen, setSearchOpen] = useState(false)
+  const [hovered, setHovered] = useState<string | null>(null)
+  // Hovering previews a node's connections; selection wins.
+  const focusNode = selected ?? hovered
 
   const view = useMemo(() => buildComponentsView(model, focus, filters), [model, focus, filters])
   const signature = useMemo(() => systemLayoutSignature(view), [view])
@@ -91,14 +94,14 @@ function Canvas({ system, onShowCode }: CanvasProps) {
 
   // Highlight what the selected node talks to.
   const neighbors = useMemo(() => {
-    if (!selected) return null
-    const set = new Set([selected])
+    if (!focusNode) return null
+    const set = new Set([focusNode])
     for (const e of view.edges) {
-      if (e.source === selected) set.add(e.target)
-      if (e.target === selected) set.add(e.source)
+      if (e.source === focusNode) set.add(e.target)
+      if (e.target === focusNode) set.add(e.source)
     }
     return set
-  }, [view, selected])
+  }, [view, focusNode])
 
   const nodes = useMemo<Node[]>(() => {
     if (!layout) return []
@@ -147,10 +150,11 @@ function Canvas({ system, onShowCode }: CanvasProps) {
   const edges = useMemo<SystemFlowEdge[]>(() => {
     if (!layout) return []
     const showLabel = view.edges.length <= LABEL_ALL_EDGES
+    const busy = !showLabel
     return view.edges
       .filter((e) => layout.nodes.has(e.source) && layout.nodes.has(e.target))
       .map((e) => {
-        const highlighted = e.source === selected || e.target === selected
+        const highlighted = e.source === focusNode || e.target === focusNode
         return {
           id: e.id,
           source: e.source,
@@ -162,13 +166,14 @@ function Canvas({ system, onShowCode }: CanvasProps) {
             members: e.members,
             count: e.count,
             highlighted,
-            dimmed: !!selected && !highlighted,
+            dimmed: !!focusNode && !highlighted,
             showLabel,
+            busy,
             points: layout.routes.get(e.id),
           },
         }
       })
-  }, [view, layout, selected])
+  }, [view, layout, focusNode])
 
   const selectedNode = selected ? model.nodes.find((n) => n.id === selected) : undefined
   const mergeable = multi.filter((id) => model.nodes.some((n) => n.id === id && n.kind === "component"))
@@ -207,6 +212,8 @@ function Canvas({ system, onShowCode }: CanvasProps) {
             const picked = model.nodes.find((n) => n.id === node.id)
             if (picked) changes.ack(picked.symbolIds)
           }}
+          onNodeMouseEnter={(_, node) => node.type !== "lane" && setHovered(node.id)}
+          onNodeMouseLeave={() => setHovered(null)}
           onNodeDoubleClick={(_, node) => {
             if (node.type === "feature") ui.focus(node.id)
           }}
@@ -273,25 +280,25 @@ function Canvas({ system, onShowCode }: CanvasProps) {
               </div>
             </Panel>
           )}
-          <Controls showInteractive={false} position="bottom-left" />
+          {!selectedNode && <Controls showInteractive={false} position="bottom-left" />}
         </ReactFlow>
+        {selectedNode && (
+          <ComponentInspector
+            key={selectedNode.id}
+            system={system}
+            node={selectedNode}
+            onNavigate={(id) => {
+              const target = model.nodes.find((n) => n.id === id)
+              if (target && focus !== null && focus !== "all" && !view.nodes.some((n) => n.id === id)) {
+                ui.focus(`feature:${target.package}/${target.feature}`)
+              }
+              ui.select(id)
+            }}
+            onShowCode={onShowCode}
+            onClose={() => ui.select(null)}
+          />
+        )}
       </div>
-      {selectedNode && (
-        <ComponentInspector
-          key={selectedNode.id}
-          system={system}
-          node={selectedNode}
-          onNavigate={(id) => {
-            const target = model.nodes.find((n) => n.id === id)
-            if (target && focus !== null && focus !== "all" && !view.nodes.some((n) => n.id === id)) {
-              ui.focus(`feature:${target.package}/${target.feature}`)
-            }
-            ui.select(id)
-          }}
-          onShowCode={onShowCode}
-          onClose={() => ui.select(null)}
-        />
-      )}
       <ComponentSearch model={model} open={searchOpen} onOpenChange={setSearchOpen} listen={active && ui.state.tab === "components"} />
     </div>
   )

@@ -52,6 +52,8 @@ export function toSystemElk(view: ComponentsView): ElkNode {
       "elk.layered.spacing.edgeEdgeBetweenLayers": "10",
       "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
       "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+      // Many callers of one component share a trunk instead of fanning in.
+      "elk.layered.mergeEdges": "true",
     },
     children: view.nodes.map((n) => ({
       id: n.id,
