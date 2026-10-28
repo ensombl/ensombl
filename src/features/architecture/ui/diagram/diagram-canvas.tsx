@@ -18,6 +18,7 @@ import { useIsActiveWorkspace } from "@/shared/workspace/workspace-context"
 import { flattenLayout, toElkGraph, type Layout } from "../../layout/elk-graph"
 import { runLayout } from "../../layout/run-layout"
 import { useDiagram } from "../../model/diagram-store"
+import { packageColor } from "../../model/package-colors"
 import { ancestorsOf, buildView, defaultExpanded, expandOneLevel } from "../../model/view"
 import { SymbolInspector } from "../inspector/symbol-inspector"
 import { DiagramToolbar } from "./diagram-toolbar"
@@ -42,14 +43,20 @@ function Canvas({ model }: { model: ArchModel }) {
     if (!state.initialized) init(defaultExpanded(model, state.filters))
   }, [state.initialized, state.filters, init, model])
 
-  const view = useMemo(
+  // Layout ignores selection so clicking around never moves nodes.
+  const layoutView = useMemo(
     () => buildView(model, { expanded: state.expanded, filters: state.filters }),
     [model, state.expanded, state.filters],
+  )
+  const selected = state.selected
+  const view = useMemo(
+    () => (selected ? buildView(model, { expanded: state.expanded, filters: state.filters, selected }) : layoutView),
+    [model, state.expanded, state.filters, selected, layoutView],
   )
 
   useEffect(() => {
     let cancelled = false
-    const { graph, routed } = toElkGraph(view)
+    const { graph, routed } = toElkGraph(layoutView)
     runLayout(graph)
       .then((result) => {
         if (!cancelled) setLayout({ layout: flattenLayout(result), routed })
@@ -58,9 +65,8 @@ function Canvas({ model }: { model: ArchModel }) {
     return () => {
       cancelled = true
     }
-  }, [view])
+  }, [layoutView])
 
-  const selected = state.selected
   const nodes = useMemo<Node[]>(() => {
     if (!layout) return []
     const boxes = layout.layout.nodes
@@ -79,13 +85,13 @@ function Canvas({ model }: { model: ArchModel }) {
         const node: GroupFlowNode = {
           ...base,
           type: "group",
-          data: { label: n.label, level: n.level, expanded: n.expanded, symbolCount: n.symbolCount },
+          data: { label: n.label, title: n.title, pkg: n.pkg, level: n.level, expanded: n.expanded, symbolCount: n.symbolCount },
           zIndex: n.expanded ? -1 : 0,
           selectable: !n.expanded,
         }
         return [node]
       }
-      const node: SymbolFlowNode = { ...base, type: "symbol", data: { symbol: n.symbol } }
+      const node: SymbolFlowNode = { ...base, type: "symbol", data: { symbol: n.symbol, pkg: n.pkg } }
       return [node]
     })
   }, [view, layout, selected])
@@ -136,6 +142,7 @@ function Canvas({ model }: { model: ArchModel }) {
     [diagram, model],
   )
 
+  // The inspector is for symbols; selecting a group just highlights its relations.
   const selectedSymbol = useMemo(
     () => (selected ? model.symbols.find((s) => s.id === selected) : undefined),
     [model, selected],
@@ -160,7 +167,7 @@ function Canvas({ model }: { model: ArchModel }) {
           zoomOnScroll={false}
           zoomOnPinch
           zoomOnDoubleClick={false}
-          onNodeClick={(_, node) => node.type === "symbol" && select(node.id)}
+          onNodeClick={(_, node) => select(node.id)}
           onPaneClick={() => select(null)}
           proOptions={{ hideAttribution: true }}
           onlyRenderVisibleElements
@@ -172,6 +179,8 @@ function Canvas({ model }: { model: ArchModel }) {
               edgeKinds={state.filters.edgeKinds}
               hideTests={state.filters.hideTests}
               showFunctions={state.filters.showFunctions}
+              allGroupEdges={state.filters.allGroupEdges}
+              onAllGroupEdges={(allGroupEdges) => diagram.setFilters({ allGroupEdges })}
               onSearch={() => setSearchOpen(true)}
               onEdgeKinds={diagram.setEdgeKinds}
               onHideTests={(hideTests) => diagram.setFilters({ hideTests })}
@@ -181,7 +190,13 @@ function Canvas({ model }: { model: ArchModel }) {
             />
           </Panel>
           <Controls showInteractive={false} position="bottom-left" />
-          <MiniMap pannable zoomable position="bottom-right" nodeStrokeWidth={2} />
+          <MiniMap
+            pannable
+            zoomable
+            position="bottom-right"
+            nodeStrokeWidth={0}
+            nodeColor={(node) => packageColor((node.data as { pkg?: string }).pkg).value}
+          />
         </ReactFlow>
       </div>
       {selectedSymbol && (

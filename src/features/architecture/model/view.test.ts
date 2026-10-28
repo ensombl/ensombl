@@ -39,7 +39,7 @@ const model: ArchModel = {
   ],
 }
 
-const filters = { hideTests: false, showFunctions: true, edgeKinds: ALL_EDGE_KINDS }
+const filters = { hideTests: false, showFunctions: true, edgeKinds: ALL_EDGE_KINDS, allGroupEdges: true }
 
 const state = (expanded: string[], extra: Partial<ViewState> = {}): ViewState => ({
   expanded: new Set(expanded),
@@ -78,9 +78,57 @@ describe("buildView", () => {
 
   it("filters test files and edge kinds", () => {
     const expanded = [packageId("api"), folderId("api", "packages/api/src/db")]
-    const view = buildView(model, state(expanded, { filters: { hideTests: true, showFunctions: true, edgeKinds: ["association"] } }))
+    const view = buildView(model, state(expanded, { filters: { ...filters, hideTests: true, edgeKinds: ["association"] } }))
     expect(view.nodes.some((n) => n.id.endsWith("#DbTest"))).toBe(false)
     expect(view.edges.every((e) => e.kind === "aggregate" || e.kind === "association")).toBe(true)
+  })
+})
+
+describe("nested folders", () => {
+  const deep: ArchModel = {
+    root: "/r",
+    symbols: [
+      sym("app/src/modules/users/http/controller.ts", "UsersController", "app"),
+      sym("app/src/modules/users/service.ts", "UsersService", "app"),
+      sym("app/src/modules/claims/service.ts", "ClaimsService", "app"),
+      sym("app/scripts/seed.ts", "Seeder", "app"),
+    ],
+    edges: [
+      { from: "app/src/modules/users/http/controller.ts#UsersController", to: "app/src/modules/claims/service.ts#ClaimsService", kind: "dependency" },
+    ],
+  }
+
+  it("nests folders and compresses single-child chains", () => {
+    const view = buildView(deep, state([packageId("app")]))
+    const labels = view.nodes.filter((n) => n.type === "group" && n.level === "folder").map((n) => n.type === "group" && n.label)
+    expect(labels).toEqual(["scripts", "src/modules"])
+    const modules = folderId("app", "app/src/modules")
+    const inside = buildView(deep, state([packageId("app"), modules]))
+    const children = inside.nodes.filter((n) => n.parent === modules).map((n) => n.type === "group" && n.label)
+    expect(children).toEqual(["claims", "users"])
+  })
+
+  it("counts every symbol below a folder", () => {
+    const view = buildView(deep, state([packageId("app")]))
+    const modules = view.nodes.find((n) => n.id === folderId("app", "app/src/modules"))
+    expect(modules?.type === "group" && modules.symbolCount).toBe(3)
+  })
+
+  it("shows group edges only for the selected node unless all are requested", () => {
+    const expanded = [packageId("app"), folderId("app", "app/src/modules")]
+    const users = folderId("app", "app/src/modules/users")
+    const quiet = buildView(deep, state(expanded, { filters: { ...filters, allGroupEdges: false } }))
+    expect(quiet.edges).toHaveLength(0)
+    const focused = buildView(deep, state(expanded, { filters: { ...filters, allGroupEdges: false }, selected: users }))
+    expect(focused.edges.map((e) => e.source)).toEqual([users])
+  })
+
+  it("expands one visible level at a time", () => {
+    const one = expandOneLevel(deep, filters, new Set())
+    expect([...one]).toEqual([packageId("app")])
+    const two = expandOneLevel(deep, filters, one)
+    expect(two.has(folderId("app", "app/src/modules"))).toBe(true)
+    expect(two.has(folderId("app", "app/src/modules/users"))).toBe(false)
   })
 })
 

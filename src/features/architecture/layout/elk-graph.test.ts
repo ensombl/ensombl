@@ -7,6 +7,7 @@ const symbol = (id: string, parent: string): DiagramView["nodes"][number] => ({
   type: "symbol",
   id,
   parent,
+  pkg: "a",
   symbol: {
     id, kind: "class", name: id, file: "a.ts", range: { startLine: 1, endLine: 1 }, package: "a",
     exported: true, isAbstract: false, typeParams: null, signature: "", members: [],
@@ -16,8 +17,8 @@ const symbol = (id: string, parent: string): DiagramView["nodes"][number] => ({
 describe("toElkGraph", () => {
   const view: DiagramView = {
     nodes: [
-      { type: "group", id: "pkg:a", level: "package", label: "a", expanded: true, symbolCount: 2 },
-      { type: "group", id: "pkg:b", level: "package", label: "b", expanded: false, symbolCount: 3 },
+      { type: "group", id: "pkg:a", level: "package", label: "a", title: "a", pkg: "a", expanded: true, symbolCount: 2 },
+      { type: "group", id: "pkg:b", level: "package", label: "b", title: "b", pkg: "b", expanded: false, symbolCount: 3 },
       symbol("A", "pkg:a"),
       symbol("B", "pkg:a"),
     ],
