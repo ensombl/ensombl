@@ -48,11 +48,23 @@ Rules:
 - Interface-layer Tauri commands contain no logic; they build the message and dispatch it.
 - Handlers depend on ports (traits), never on concrete adapters.
 
+## Install
+
+Grab the latest build from [Releases](https://github.com/ensombl/crm/releases): `.dmg` for macOS (Apple Silicon or Intel), `.AppImage`/`.deb` for Linux, `.msi` for Windows. Builds aren't code-signed yet, so on macOS right-click the app and choose **Open** the first time.
+
+To release: push a `v*` tag (for example `git tag v0.1.0 && git push --tags`). The Release workflow builds every platform and attaches the installers to a draft release.
+
 ## Develop
 
 ```sh
 pnpm install
 pnpm tauri dev
+```
+
+Build a local app bundle:
+
+```sh
+pnpm tauri build            # .app and .dmg under src-tauri/target/release/bundle
 ```
 
 Checks:

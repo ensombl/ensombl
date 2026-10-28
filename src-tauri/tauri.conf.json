@@ -39,6 +39,13 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Clanker Resource Management",
+    "longDescription": "An architecture-first editor for coding agents: a live UML of your codebase next to Claude Code, Codex and friends.",
+    "copyright": "© ensombl",
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
   }
 }
