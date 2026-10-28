@@ -140,6 +140,13 @@
   --xy-selection-background-color: oklch(1 0 0 / 4%);
   --xy-selection-border: 1px solid var(--ring);
 }
+/*
+ * The map on its own GPU layer: panning slides it instead of repainting every
+ * box. Without this, zoomed-in WKWebView frames took 400-750ms.
+ */
+.react-flow__viewport {
+  will-change: transform;
+}
 .react-flow .react-flow__node {
   border: none;
   background: transparent;

@@ -243,6 +243,8 @@ function Canvas({ system, onShowClasses }: CanvasProps) {
           nodesDraggable={false}
           panOnScroll
           panOnScrollMode={PanOnScrollMode.Free}
+          // The map follows your fingers 1:1 (React Flow's default is half speed).
+          panOnScrollSpeed={1}
           zoomOnScroll={false}
           zoomOnPinch
           zoomOnDoubleClick={false}

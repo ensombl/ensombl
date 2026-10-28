@@ -218,6 +218,8 @@ function Canvas({ model }: { model: ArchModel }) {
           // Trackpad: two-finger scroll pans, pinch zooms.
           panOnScroll
           panOnScrollMode={PanOnScrollMode.Free}
+          // The map follows your fingers 1:1 (React Flow's default is half speed).
+          panOnScrollSpeed={1}
           zoomOnScroll={false}
           zoomOnPinch
           zoomOnDoubleClick={false}
