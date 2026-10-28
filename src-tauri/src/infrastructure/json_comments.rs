@@ -99,6 +99,7 @@ mod tests {
             id: "c1".into(),
             file: "a.ts".into(),
             line: 1,
+            end_line: Some(3),
             body: "x".into(),
             anchor: "a".into(),
             resolved: false,

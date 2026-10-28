@@ -8,9 +8,13 @@ file: string,
 /**
  * 1-based line the comment was written on (updated when re-anchored).
  */
-line: number, body: string, 
+line: number, 
 /**
- * Trimmed text of the commented line when the comment was made.
+ * Last line of a multi-line comment; it moves with `line`.
+ */
+endLine?: number, body: string, 
+/**
+ * Trimmed text of the commented (first) line when the comment was made.
  */
 anchor: string, resolved: boolean, 
 /**
