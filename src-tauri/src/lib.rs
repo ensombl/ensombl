@@ -8,6 +8,7 @@ use std::sync::{Arc, mpsc};
 use tauri::Manager;
 
 use application::commands::indexing::{IndexingCommands, IndexingPorts, ReindexPaths};
+use application::commands::patterns::PatternCommands;
 use application::commands::terminals::{TerminalCommands, TerminalRegistry};
 use application::commands::workspaces::WorkspaceCommands;
 use application::cqrs::CommandHandler;
@@ -15,12 +16,14 @@ use application::index_registry::IndexRegistry;
 use application::ports::SourceScanner;
 use application::queries::get_app_info::GetAppInfoHandler;
 use application::queries::model::ModelQueries;
+use application::queries::patterns::PatternQueries;
 use application::queries::terminals::TerminalQueries;
 use application::queries::workspaces::WorkspaceQueries;
 use domain::terminal::AgentProfile;
 use infrastructure::build_info::CargoBuildInfo;
 use infrastructure::fs_scanner::FsScanner;
 use infrastructure::git_cli::GitCli;
+use infrastructure::json_decisions::JsonDecisions;
 use infrastructure::json_sessions::JsonSessions;
 use infrastructure::login_shell::LoginShell;
 use infrastructure::native_pty::NativePty;
@@ -75,6 +78,7 @@ pub fn run() {
                 }
             });
 
+            let decisions = Arc::new(JsonDecisions::open(data_dir.join("patterns.json")));
             let shell = Arc::new(LoginShell::detect());
             let terminals = Arc::new(TerminalRegistry::default());
             let profiles = AgentProfile::builtin();
@@ -89,7 +93,16 @@ pub fn run() {
                 )),
                 workspace_queries: Arc::new(WorkspaceQueries::new(git, sessions.clone())),
                 indexing_commands: indexing,
-                model_queries: Arc::new(ModelQueries::new(registry)),
+                model_queries: Arc::new(ModelQueries::new(registry.clone())),
+                pattern_commands: Arc::new(PatternCommands::new(
+                    sessions.clone(),
+                    decisions.clone(),
+                )),
+                pattern_queries: Arc::new(PatternQueries::new(
+                    sessions.clone(),
+                    registry,
+                    decisions,
+                )),
                 terminal_commands: Arc::new(TerminalCommands::new(
                     sessions,
                     shell.clone(),
@@ -117,6 +130,8 @@ pub fn run() {
             cmd::remove_project,
             cmd::index_worktree,
             cmd::drop_index,
+            cmd::get_patterns,
+            cmd::set_pattern_decision,
             cmd::list_agents,
             cmd::list_terminals,
             cmd::start_terminal,

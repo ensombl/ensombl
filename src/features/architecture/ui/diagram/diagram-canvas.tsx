@@ -21,6 +21,8 @@ import { useChanges } from "../../model/changes-store"
 import { useDiagram } from "../../model/diagram-store"
 import { packageColor } from "../../model/package-colors"
 import { ancestorsOf, buildHierarchy, buildView, defaultExpanded, expandOneLevel } from "../../model/view"
+import { PatternsPanel } from "@/features/patterns/ui/patterns-panel"
+
 import { SymbolInspector } from "../inspector/symbol-inspector"
 import { DiagramToolbar } from "./diagram-toolbar"
 import { GroupNodeComponent, type GroupFlowNode } from "./group-node"
@@ -79,6 +81,7 @@ function Canvas({ model }: { model: ArchModel }) {
     return at
   }, [model, changes.changed])
 
+  const spotlight = state.spotlight
   const nodes = useMemo<Node[]>(() => {
     if (!layout) return []
     const boxes = layout.layout.nodes
@@ -111,14 +114,15 @@ function Canvas({ model }: { model: ArchModel }) {
         }
         return [node]
       }
+      const role = spotlight?.roles[n.id]
       const node: SymbolFlowNode = {
         ...base,
         type: "symbol",
-        data: { symbol: n.symbol, pkg: n.pkg, changedAt: changedAt.get(n.id) },
+        data: { symbol: n.symbol, pkg: n.pkg, changedAt: changedAt.get(n.id), role, dimmed: !!spotlight && !role },
       }
       return [node]
     })
-  }, [view, layout, selected, changedAt])
+  }, [view, layout, selected, changedAt, spotlight])
 
   const edges = useMemo<UmlFlowEdge[]>(() => {
     if (!layout) return []
@@ -126,7 +130,8 @@ function Canvas({ model }: { model: ArchModel }) {
     return view.edges
       .filter((e) => boxes.has(e.source) && boxes.has(e.target))
       .map((e) => {
-        const touches = e.source === selected || e.target === selected
+        const inSpotlight = !!spotlight?.roles[e.source] && !!spotlight?.roles[e.target]
+        const touches = e.source === selected || e.target === selected || inSpotlight
         return {
           id: e.id,
           source: e.source,
@@ -137,12 +142,12 @@ function Canvas({ model }: { model: ArchModel }) {
             kind: e.kind,
             count: e.count,
             highlighted: touches,
-            dimmed: selected !== null && !touches,
+            dimmed: (selected !== null || !!spotlight) && !touches,
             points: layout.routed.has(e.id) ? routes.get(e.id) : undefined,
           },
         }
       })
-  }, [view, layout, selected])
+  }, [view, layout, selected, spotlight])
 
   // First layout: fit everything. Later: center on a revealed symbol.
   useEffect(() => {
@@ -151,10 +156,11 @@ function Canvas({ model }: { model: ArchModel }) {
       fitted.current = true
       requestAnimationFrame(() => flow.fitView({ padding: 0.12, maxZoom: 1 }))
     }
-    if (state.focus && layout.layout.nodes.has(state.focus)) {
-      const id = state.focus
+    const focus = state.focus?.filter((id) => layout.layout.nodes.has(id))
+    if (focus?.length) {
       clearFocus()
-      requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], duration: 500, maxZoom: 1.2, padding: 0.6 }))
+      const padding = focus.length === 1 ? 0.6 : 0.2
+      requestAnimationFrame(() => flow.fitView({ nodes: focus.map((id) => ({ id })), duration: 500, maxZoom: 1.2, padding }))
     }
   }, [layout, flow, state.focus, clearFocus])
 
@@ -174,6 +180,7 @@ function Canvas({ model }: { model: ArchModel }) {
 
   return (
     <div className="flex h-full">
+      {state.patternsOpen && <PatternsPanel model={model} />}
       <div className="relative min-w-0 flex-1">
         <ReactFlow
           nodes={nodes}
@@ -195,7 +202,10 @@ function Canvas({ model }: { model: ArchModel }) {
             select(node.id)
             if (node.type === "symbol") changes.ack([node.id])
           }}
-          onPaneClick={() => select(null)}
+          onPaneClick={() => {
+            select(null)
+            diagram.clearSpotlight()
+          }}
           proOptions={{ hideAttribution: true }}
           onlyRenderVisibleElements
         >
@@ -220,6 +230,8 @@ function Canvas({ model }: { model: ArchModel }) {
                 if (next) reveal(next)
               }}
               onClearChanges={changes.clear}
+              patternsOpen={state.patternsOpen}
+              onTogglePatterns={diagram.togglePatterns}
             />
           </Panel>
           <Controls showInteractive={false} position="bottom-left" />

@@ -520,6 +520,20 @@ mod smoke {
         let mut packages: Vec<_> = packages.into_iter().collect();
         packages.sort_by_key(|p| std::cmp::Reverse(p.1));
         println!("top packages: {:?}", &packages[..packages.len().min(8)]);
+        let patterns = crate::domain::patterns::detect(&model);
+        let mut by_kind: HashMap<String, usize> = HashMap::new();
+        for p in &patterns {
+            *by_kind.entry(format!("{:?}", p.kind)).or_default() += 1;
+        }
+        println!("patterns ({}): {by_kind:?}", patterns.len());
+        for p in patterns.iter().take(15) {
+            println!(
+                "  {:.2} {} [{}]",
+                p.confidence,
+                p.name,
+                p.evidence.join("; ")
+            );
+        }
     }
 }
 

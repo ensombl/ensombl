@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Bot, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -8,6 +8,7 @@ import { Pane, PaneEmpty } from "@/shared/ui/pane"
 import { useIsActiveWorkspace, useWorkspace } from "@/shared/workspace/workspace-context"
 
 import { useModel } from "@/features/architecture/queries/model-queries"
+import { usePatterns } from "@/features/patterns/queries/pattern-queries"
 
 import { useCloseTerminal, useStartTerminal } from "../commands/terminal-commands"
 import { useAgents, useTerminals } from "../queries/agent-queries"
@@ -26,6 +27,8 @@ export function AgentsPane() {
   const close = useCloseTerminal(worktree.id)
   const [selected, setSelected] = useState<string | null>(null)
   const { data: model = null } = useModel(worktree.id)
+  const { data: patternViews } = usePatterns(worktree.id, !!model)
+  const patterns = useMemo(() => (patternViews ?? []).filter((p) => p.decision !== "dismissed").map((p) => p.pattern), [patternViews])
 
   const active = terminals.find((t) => t.id === selected) ?? terminals[terminals.length - 1]
   const kindOf = (t: TerminalInfo) => agents.find((a) => a.profile.id === t.profileId)?.profile.kind ?? "custom"
@@ -104,7 +107,7 @@ export function AgentsPane() {
               />
             ))}
           </div>
-          <Composer model={model} target={active} />
+          <Composer model={model} patterns={patterns} target={active} />
         </div>
       )}
     </Pane>

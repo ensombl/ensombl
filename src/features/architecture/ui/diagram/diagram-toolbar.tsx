@@ -1,4 +1,6 @@
-import { ChevronsDownUp, ChevronsUpDown, FlaskConical, FunctionSquare, Network, Search, Sparkle, X } from "lucide-react"
+import { ChevronsDownUp, ChevronsUpDown, FlaskConical, FunctionSquare, Network, Search, Shapes, Sparkle, X } from "lucide-react"
+
+import { Toggle } from "@/components/ui/toggle"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -31,11 +33,16 @@ interface DiagramToolbarProps {
   changedCount: number
   onNextChange: () => void
   onClearChanges: () => void
+  patternsOpen: boolean
+  onTogglePatterns: () => void
 }
 
 export function DiagramToolbar(props: DiagramToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background/90 p-1.5 shadow-sm backdrop-blur">
+      <Toggle variant="outline" size="sm" className="h-8 gap-1.5 text-xs" pressed={props.patternsOpen} onPressedChange={props.onTogglePatterns}>
+        <Shapes /> Patterns
+      </Toggle>
       <Button variant="outline" size="sm" className="h-8 gap-2 text-muted-foreground" onClick={props.onSearch}>
         <Search /> Find symbol
         <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">⌘K</kbd>

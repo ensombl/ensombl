@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from "react"
-import { AtSign, CornerDownLeft, FileCode2, X } from "lucide-react"
+import { AtSign, CornerDownLeft, FileCode2, Shapes, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { KindBadge } from "@/features/architecture/ui/kind-badge"
 import { cn } from "@/lib/utils"
 import type { ArchModel } from "@/shared/bindings/ArchModel"
+import type { PatternInstance } from "@/shared/bindings/PatternInstance"
 import type { TerminalInfo } from "@/shared/bindings/TerminalInfo"
 import { tagKey, usePromptTags } from "@/shared/workspace/prompt-tags"
 
@@ -16,24 +17,26 @@ import { matchSuggestions, mentionAt, taggables, type Suggestion } from "../mode
 
 interface ComposerProps {
   model: ArchModel | null
+  patterns: PatternInstance[]
   target: TerminalInfo | undefined
 }
 
 function SuggestionIcon({ s }: { s: Suggestion }) {
   if (s.kind === "file") return <FileCode2 className="size-4 text-muted-foreground" />
   if (s.kind === "member") return <AtSign className="size-4 text-muted-foreground" />
+  if (s.kind === "pattern") return <Shapes className="size-4 text-violet-300" />
   return <KindBadge kind={s.kind} className="size-4 text-[9px]" />
 }
 
 /** Prompt box for the active agent with `@` tagging of classes, members and files. */
-export function Composer({ model, target }: ComposerProps) {
+export function Composer({ model, patterns, target }: ComposerProps) {
   const { tags, add, remove, clear } = usePromptTags()
   const [text, setText] = useState("")
   const [caret, setCaret] = useState(0)
   const [highlight, setHighlight] = useState(0)
   const input = useRef<HTMLTextAreaElement>(null)
 
-  const all = useMemo(() => taggables(model), [model])
+  const all = useMemo(() => taggables(model, patterns), [model, patterns])
   const mention = mentionAt(text, caret)
   const suggestions = useMemo(() => (mention ? matchSuggestions(all, mention.query) : []), [all, mention?.query]) // eslint-disable-line react-hooks/exhaustive-deps
   const open = mention !== null && suggestions.length > 0
@@ -56,7 +59,7 @@ export function Composer({ model, target }: ComposerProps) {
 
   const send = async () => {
     if (!target || !canSend) return
-    const prompt = buildPrompt(text, tags, model)
+    const prompt = buildPrompt(text, tags, model, patterns)
     await writeTerminal(target.id, bracketedPaste(prompt))
     // Give the TUI a beat to take the paste before submitting it.
     setTimeout(() => void writeTerminal(target.id, "\r"), 60)

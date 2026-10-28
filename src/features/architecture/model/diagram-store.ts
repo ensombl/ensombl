@@ -12,8 +12,11 @@ export interface DiagramState {
   filters: ViewFilters
   /** Symbol shown in the inspector. */
   selected: string | null
-  /** Node to center on once it's laid out. */
-  focus: string | null
+  /** Nodes to center on once they're laid out. */
+  focus: string[] | null
+  /** Spotlighted pattern: participant symbol id to its role. Everything else dims. */
+  spotlight: { patternId: string; roles: Record<string, string> } | null
+  patternsOpen: boolean
 }
 
 const initial = (): DiagramState => ({
@@ -22,6 +25,8 @@ const initial = (): DiagramState => ({
   filters: { hideTests: true, showFunctions: false, edgeKinds: ALL_EDGE_KINDS, allGroupEdges: false },
   selected: null,
   focus: null,
+  spotlight: null,
+  patternsOpen: false,
 })
 
 interface DiagramStore {
@@ -66,9 +71,19 @@ export function useDiagram() {
       update((s) => ({
         expanded: new Set([...s.expanded, ...ancestors]),
         selected: symbolId,
-        focus: symbolId,
+        focus: [symbolId],
         filters: needsFunctions ? { ...s.filters, showFunctions: true } : s.filters,
       })),
     clearFocus: () => update(() => ({ focus: null })),
+    /** Reveals all participants of a pattern and dims the rest of the map. */
+    spotlight: (patternId: string, roles: Record<string, string>, ancestors: string[]) =>
+      update((s) => ({
+        expanded: new Set([...s.expanded, ...ancestors]),
+        spotlight: { patternId, roles },
+        focus: Object.keys(roles),
+        selected: null,
+      })),
+    clearSpotlight: () => update(() => ({ spotlight: null })),
+    togglePatterns: () => update((s) => ({ patternsOpen: !s.patternsOpen })),
   }
 }

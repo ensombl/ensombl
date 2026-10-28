@@ -7,9 +7,20 @@ export type PromptTag =
   | { type: "symbol"; symbolId: string; label: string }
   | { type: "member"; symbolId: string; member: string; label: string }
   | { type: "file"; path: string; label: string }
+  | { type: "pattern"; patternId: string; label: string }
 
-export const tagKey = (tag: PromptTag) =>
-  tag.type === "file" ? `file:${tag.path}` : tag.type === "member" ? `member:${tag.symbolId}.${tag.member}` : `symbol:${tag.symbolId}`
+export function tagKey(tag: PromptTag): string {
+  switch (tag.type) {
+    case "file":
+      return `file:${tag.path}`
+    case "member":
+      return `member:${tag.symbolId}.${tag.member}`
+    case "pattern":
+      return `pattern:${tag.patternId}`
+    default:
+      return `symbol:${tag.symbolId}`
+  }
+}
 
 interface PromptTagsStore {
   byWorktree: Record<string, PromptTag[]>
