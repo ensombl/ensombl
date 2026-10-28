@@ -20,6 +20,8 @@ use crate::application::{Error, Result};
 use crate::domain::linker::Linker;
 use crate::domain::model::{ArchModel, Edge, ModelDelta, SymbolNode};
 use crate::domain::parsed::ParsedFile;
+use crate::domain::system;
+use crate::domain::system::model::SystemModel;
 use crate::domain::workspace::WorktreeId;
 
 /// Indexes an open worktree tab and starts watching it. A no-op when it's already indexed, unless `force`.
@@ -88,24 +90,27 @@ fn hash(source: &str) -> String {
     blake3::hash(source.as_bytes()).to_hex()[..16].to_string()
 }
 
-/// Rebuilds the linked model from parsed files.
+/// Rebuilds the linked model and the system view from parsed files.
 fn build_model(
     root: &Path,
     files: &HashMap<String, ParsedFile>,
     resolver: &dyn ModuleResolver,
-) -> ArchModel {
+) -> (ArchModel, SystemModel) {
     let resolve = |from: &str, spec: &str| resolver.resolve(from, spec);
-    let edges = Linker::new(files, &resolve).link();
+    let linker = Linker::new(files, &resolve);
+    let edges = linker.link();
+    let system = system::build::build(files, &edges, &linker);
     let mut symbols: Vec<SymbolNode> = files
         .values()
         .flat_map(|f| f.symbols.iter().cloned())
         .collect();
     symbols.sort_by(|a, b| a.id.cmp(&b.id));
-    ArchModel {
+    let model = ArchModel {
         root: root.to_string_lossy().into_owned(),
         symbols,
         edges,
-    }
+    };
+    (model, system)
 }
 
 impl IndexingCommands {
@@ -192,12 +197,13 @@ impl CommandHandler<IndexWorktree> for IndexingCommands {
         self.ports.cache.put_many(id, &fresh);
 
         let resolver = self.ports.resolvers.for_root(&root);
-        let model = build_model(&root, &files, resolver.as_ref());
+        let (model, system) = build_model(&root, &files, resolver.as_ref());
         let index = WorktreeIndex {
             root: root.clone(),
             files,
             resolver,
             model,
+            system,
         };
         let summary = Self::summary(&index, fresh.len(), started);
         self.registry.insert(id, index);
@@ -271,7 +277,8 @@ impl CommandHandler<ReindexPaths> for IndexingCommands {
             let removed: Vec<String> = before.into_keys().filter(|id| !seen.contains(id)).collect();
             let old_edges: HashSet<Edge> =
                 std::mem::take(&mut index.model.edges).into_iter().collect();
-            index.model = build_model(&index.root, &index.files, index.resolver.as_ref());
+            (index.model, index.system) =
+                build_model(&index.root, &index.files, index.resolver.as_ref());
             let new_edges: HashSet<&Edge> = index.model.edges.iter().collect();
             let changed: HashSet<String> = changed.into_iter().collect();
             ModelDelta {
@@ -581,6 +588,65 @@ mod smoke {
             *by_kind.entry(format!("{:?}", p.kind)).or_default() += 1;
         }
         println!("patterns ({}): {by_kind:?}", patterns.len());
+        let system = registry.system("wt").unwrap();
+        let mut roles: HashMap<String, usize> = HashMap::new();
+        for n in &system.nodes {
+            *roles.entry(format!("{:?}", n.role)).or_default() += 1;
+        }
+        let mut kinds: HashMap<String, usize> = HashMap::new();
+        for i in &system.interactions {
+            *kinds.entry(format!("{:?}", i.kind)).or_default() += 1;
+        }
+        println!(
+            "system: {} nodes {roles:?}, {} interactions {kinds:?}, {} entry points, {} violations, {} KB",
+            system.nodes.len(),
+            system.interactions.len(),
+            system.entry_points.len(),
+            crate::domain::system::boundaries::check(&system, &[]).len(),
+            serde_json::to_vec(&system).unwrap().len() / 1024
+        );
+        let violations = crate::domain::system::boundaries::check(&system, &[]);
+        let mut rules: HashMap<&str, usize> = HashMap::new();
+        for v in &violations {
+            *rules.entry(v.rule.as_str()).or_default() += 1;
+        }
+        println!("violations by rule: {rules:?}");
+        let role = |id: &str| {
+            system
+                .nodes
+                .iter()
+                .find(|n| n.id == id)
+                .map(|n| format!("{:?}", n.role))
+                .unwrap_or_default()
+        };
+        let mut pairs: HashMap<String, usize> = HashMap::new();
+        for v in &violations {
+            let i = system
+                .interactions
+                .iter()
+                .find(|i| i.id == v.interaction)
+                .unwrap();
+            *pairs
+                .entry(format!("{} {}->{}", v.rule, role(&i.from), role(&i.to)))
+                .or_default() += 1;
+        }
+        let mut pairs: Vec<_> = pairs.into_iter().collect();
+        pairs.sort_by_key(|p| std::cmp::Reverse(p.1));
+        println!("violation pairs: {:?}", &pairs[..pairs.len().min(8)]);
+        for role in ["Client", "Other"] {
+            let sample: Vec<String> = system
+                .nodes
+                .iter()
+                .filter(|n| format!("{:?}", n.role) == role)
+                .take(6)
+                .map(|n| format!("{} ({})", n.name, n.file.as_deref().unwrap_or("")))
+                .collect();
+            println!("{role}: {sample:?}");
+        }
+        for e in system.entry_points.iter().take(8) {
+            let steps = crate::domain::system::flow::trace(&system, &e.id, 6);
+            println!("  {} -> {} steps", e.label, steps.len());
+        }
         for p in patterns.iter().take(15) {
             println!(
                 "  {:.2} {} [{}]",

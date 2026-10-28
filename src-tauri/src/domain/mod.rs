@@ -8,5 +8,6 @@ pub mod model;
 pub mod parsed;
 pub mod patterns;
 pub mod review;
+pub mod system;
 pub mod terminal;
 pub mod workspace;

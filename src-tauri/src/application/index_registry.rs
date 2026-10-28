@@ -7,6 +7,7 @@ use std::sync::RwLock;
 
 use crate::domain::model::ArchModel;
 use crate::domain::parsed::ParsedFile;
+use crate::domain::system::model::SystemModel;
 
 use super::ports::ModuleResolver;
 
@@ -15,6 +16,7 @@ pub struct WorktreeIndex {
     pub files: HashMap<String, ParsedFile>,
     pub resolver: Box<dyn ModuleResolver>,
     pub model: ArchModel,
+    pub system: SystemModel,
 }
 
 #[derive(Default)]
@@ -49,6 +51,14 @@ impl IndexRegistry {
             .unwrap()
             .get(worktree)
             .map(|i| i.model.clone())
+    }
+
+    pub fn system(&self, worktree: &str) -> Option<SystemModel> {
+        self.indexes
+            .read()
+            .unwrap()
+            .get(worktree)
+            .map(|i| i.system.clone())
     }
 
     pub fn update<T>(&self, worktree: &str, f: impl FnOnce(&mut WorktreeIndex) -> T) -> Option<T> {

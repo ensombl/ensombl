@@ -71,6 +71,11 @@ impl<'a, R: Resolve> Linker<'a, R> {
         edges
     }
 
+    /// The file an import specifier points at.
+    pub fn resolve_file(&self, from: &str, specifier: &str) -> Option<String> {
+        self.resolver.resolve(from, specifier)
+    }
+
     /// Resolves a type name as written in `file` to a symbol id.
     pub fn resolve_name(&self, file: &ParsedFile, name: &str) -> Option<String> {
         if let Some((ns, member)) = name.split_once('.') {
