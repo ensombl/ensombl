@@ -71,7 +71,7 @@ pub struct PermissionDecision {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum NoticeLevel {
@@ -79,8 +79,8 @@ pub enum NoticeLevel {
     Error,
 }
 
-/// One thing that happened in a chat, in order.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+/// One thing that happened in a run, in order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
