@@ -1,4 +1,4 @@
-import { Code2, Loader2, Network, RefreshCw, Route, Waypoints } from "lucide-react"
+import { Code2, Loader2, Network, RefreshCw, Route, ShieldCheck, Waypoints } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -14,12 +14,14 @@ import { useWorktreeIndex } from "../model/use-worktree-index"
 import { ancestorsOf } from "../model/view"
 import { useSystem } from "../queries/system-queries"
 import { ComponentsCanvas } from "./components/components-canvas"
+import { BoundariesView } from "./boundaries/boundaries-view"
 import { DiagramCanvas } from "./diagram/diagram-canvas"
 import { FlowsView } from "./flows/flows-view"
 
 const TABS: { value: ArchitectureTab; label: string; icon: typeof Network }[] = [
   { value: "components", label: "Components", icon: Waypoints },
   { value: "flows", label: "Flows", icon: Route },
+  { value: "boundaries", label: "Boundaries", icon: ShieldCheck },
   { value: "code", label: "Code", icon: Code2 },
 ]
 
@@ -50,6 +52,13 @@ function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string })
         {system && (
           <ErrorBoundary resetKey={system}>
             <FlowsView system={system} />
+          </ErrorBoundary>
+        )}
+      </TabsContent>
+      <TabsContent value="boundaries" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
+        {system && (
+          <ErrorBoundary resetKey={system}>
+            <BoundariesView system={system} />
           </ErrorBoundary>
         )}
       </TabsContent>
