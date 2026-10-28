@@ -17,9 +17,10 @@ import { useIsActiveWorkspace } from "@/shared/workspace/workspace-context"
 
 import { flattenLayout, toElkGraph, type Layout } from "../../layout/elk-graph"
 import { runLayout } from "../../layout/run-layout"
+import { useChanges } from "../../model/changes-store"
 import { useDiagram } from "../../model/diagram-store"
 import { packageColor } from "../../model/package-colors"
-import { ancestorsOf, buildView, defaultExpanded, expandOneLevel } from "../../model/view"
+import { ancestorsOf, buildHierarchy, buildView, defaultExpanded, expandOneLevel } from "../../model/view"
 import { SymbolInspector } from "../inspector/symbol-inspector"
 import { DiagramToolbar } from "./diagram-toolbar"
 import { GroupNodeComponent, type GroupFlowNode } from "./group-node"
@@ -67,6 +68,17 @@ function Canvas({ model }: { model: ArchModel }) {
     }
   }, [layoutView])
 
+  // Changed symbols mark themselves and every group that contains them.
+  const changes = useChanges()
+  const changedAt = useMemo(() => {
+    const at = new Map<string, number>()
+    const { ancestors } = buildHierarchy(model.symbols)
+    for (const [id, time] of Object.entries(changes.changed)) {
+      for (const key of [id, ...(ancestors.get(id) ?? [])]) at.set(key, Math.max(at.get(key) ?? 0, time))
+    }
+    return at
+  }, [model, changes.changed])
+
   const nodes = useMemo<Node[]>(() => {
     if (!layout) return []
     const boxes = layout.layout.nodes
@@ -85,16 +97,28 @@ function Canvas({ model }: { model: ArchModel }) {
         const node: GroupFlowNode = {
           ...base,
           type: "group",
-          data: { label: n.label, title: n.title, pkg: n.pkg, level: n.level, expanded: n.expanded, symbolCount: n.symbolCount },
+          data: {
+            label: n.label,
+            title: n.title,
+            pkg: n.pkg,
+            level: n.level,
+            expanded: n.expanded,
+            symbolCount: n.symbolCount,
+            changedAt: changedAt.get(n.id),
+          },
           zIndex: n.expanded ? -1 : 0,
           selectable: !n.expanded,
         }
         return [node]
       }
-      const node: SymbolFlowNode = { ...base, type: "symbol", data: { symbol: n.symbol, pkg: n.pkg } }
+      const node: SymbolFlowNode = {
+        ...base,
+        type: "symbol",
+        data: { symbol: n.symbol, pkg: n.pkg, changedAt: changedAt.get(n.id) },
+      }
       return [node]
     })
-  }, [view, layout, selected])
+  }, [view, layout, selected, changedAt])
 
   const edges = useMemo<UmlFlowEdge[]>(() => {
     if (!layout) return []
@@ -167,7 +191,10 @@ function Canvas({ model }: { model: ArchModel }) {
           zoomOnScroll={false}
           zoomOnPinch
           zoomOnDoubleClick={false}
-          onNodeClick={(_, node) => select(node.id)}
+          onNodeClick={(_, node) => {
+            select(node.id)
+            if (node.type === "symbol") changes.ack([node.id])
+          }}
           onPaneClick={() => select(null)}
           proOptions={{ hideAttribution: true }}
           onlyRenderVisibleElements
@@ -187,6 +214,12 @@ function Canvas({ model }: { model: ArchModel }) {
               onShowFunctions={(showFunctions) => diagram.setFilters({ showFunctions })}
               onExpandAll={() => diagram.setExpanded(expandOneLevel(model, state.filters, state.expanded))}
               onCollapseAll={diagram.collapseAll}
+              changedCount={Object.keys(changes.changed).length}
+              onNextChange={() => {
+                const next = Object.entries(changes.changed).sort((a, b) => b[1] - a[1])[0]?.[0]
+                if (next) reveal(next)
+              }}
+              onClearChanges={changes.clear}
             />
           </Panel>
           <Controls showInteractive={false} position="bottom-left" />
