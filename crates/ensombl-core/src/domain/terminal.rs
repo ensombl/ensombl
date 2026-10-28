@@ -31,7 +31,29 @@ pub struct AgentProfile {
     pub args: Vec<String>,
 }
 
+/// What the lead agent is told: plan, delegate through Ensombl, review, merge.
+pub const LEAD_INSTRUCTIONS: &str = "You are the lead engineer in Ensombl. Other agents do the implementation: use the ensombl tools to split the user's request into well-scoped tasks (create_task, with depends_on when one needs another merged first), wait for them, read their summaries, activity and diffs, ask for changes with send_follow_up, and approve_task to merge work you're happy with. Answer tasks waiting on a permission with answer_task when the request is safe, otherwise ask the user. Keep the user informed, and only edit code yourself for trivial fixes.";
+
 impl AgentProfile {
+    /// An interactive Claude that orchestrates through Ensombl's MCP bridge,
+    /// described by the config file at `mcp_config`.
+    pub fn lead(mcp_config: &str) -> AgentProfile {
+        AgentProfile {
+            id: "lead".into(),
+            label: "Lead (orchestrates tasks)".into(),
+            kind: AgentKind::Claude,
+            command: "claude".into(),
+            args: vec![
+                "--mcp-config".into(),
+                mcp_config.into(),
+                "--allowedTools".into(),
+                "mcp__ensombl".into(),
+                "--append-system-prompt".into(),
+                LEAD_INSTRUCTIONS.into(),
+            ],
+        }
+    }
+
     pub fn builtin() -> Vec<AgentProfile> {
         let profile = |id: &str, label: &str, kind, command: &str| AgentProfile {
             id: id.into(),
@@ -94,6 +116,20 @@ mod tests {
         let snap = s.snapshot();
         assert_eq!(snap.len(), Scrollback::CAPACITY);
         assert!(snap.ends_with(b"xyz"));
+    }
+
+    #[test]
+    fn the_lead_uses_ensombls_tools() {
+        let lead = AgentProfile::lead("/data/mcp.json");
+        assert_eq!(
+            &lead.args[..4],
+            [
+                "--mcp-config",
+                "/data/mcp.json",
+                "--allowedTools",
+                "mcp__ensombl"
+            ]
+        );
     }
 
     #[test]
