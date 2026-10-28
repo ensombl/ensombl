@@ -12,7 +12,10 @@ use tree_sitter::{Language, Node, Parser};
 use crate::application::ports::SourceParser;
 use crate::application::{Error, Result};
 use crate::domain::model::{Member, MemberKind, Range, SymbolKind, SymbolNode, Visibility};
-use crate::domain::parsed::{Import, ImportedName, ParsedFile, ReExport, SymbolRefs};
+use crate::domain::parsed::{
+    CallSite, Decorator, DecoratorSite, DecoratorTarget, Import, ImportedName, JsxUse, ParsedFile,
+    ReExport, SymbolRefs,
+};
 
 pub struct TreeSitterParser;
 
@@ -31,7 +34,7 @@ fn parser_for(language: Language) -> Parser {
 
 impl SourceParser for TreeSitterParser {
     fn version(&self) -> u32 {
-        1
+        2
     }
 
     fn parse(&self, path: &str, package: &str, source: &str) -> Result<ParsedFile> {
@@ -48,6 +51,7 @@ impl SourceParser for TreeSitterParser {
             path,
             package,
             out: ParsedFile::default(),
+            class_decorators: vec![],
         };
         extractor.out.path = path.into();
         extractor.program(tree.root_node());
@@ -60,6 +64,75 @@ struct Extractor<'a> {
     path: &'a str,
     package: &'a str,
     out: ParsedFile,
+    /// Decorators written before `export class`, which sit on the export statement.
+    class_decorators: Vec<Decorator>,
+}
+
+/// Globals whose calls say nothing about architecture.
+const NOISE_OBJECTS: &[&str] = &[
+    "console", "JSON", "Math", "Object", "Array", "Promise", "Number", "String", "Date", "Reflect",
+    "Symbol", "process", "window", "document", "Buffer",
+];
+/// Collection and string helpers, ignored unless called on an injected field.
+const NOISE_METHODS: &[&str] = &[
+    "then",
+    "catch",
+    "finally",
+    "map",
+    "filter",
+    "forEach",
+    "reduce",
+    "push",
+    "pop",
+    "shift",
+    "unshift",
+    "join",
+    "split",
+    "trim",
+    "toString",
+    "slice",
+    "splice",
+    "concat",
+    "includes",
+    "indexOf",
+    "some",
+    "every",
+    "sort",
+    "replace",
+    "toLowerCase",
+    "toUpperCase",
+    "startsWith",
+    "endsWith",
+    "flatMap",
+    "padStart",
+    "toFixed",
+    "bind",
+    "call",
+    "apply",
+];
+const NOISE_FUNCTIONS: &[&str] = &[
+    "require",
+    "setTimeout",
+    "setInterval",
+    "clearTimeout",
+    "clearInterval",
+    "parseInt",
+    "parseFloat",
+    "String",
+    "Number",
+    "Boolean",
+    "Array",
+    "Error",
+    "isNaN",
+    "structuredClone",
+];
+
+fn is_noise(object: &[String], method: &str) -> bool {
+    match object.first().map(String::as_str) {
+        None => NOISE_FUNCTIONS.contains(&method),
+        Some("this") if object.len() > 1 => false,
+        Some(root) => NOISE_OBJECTS.contains(&root) || NOISE_METHODS.contains(&method),
+    }
 }
 
 fn named_children<'t>(node: Node<'t>) -> Vec<Node<'t>> {
@@ -122,6 +195,9 @@ impl<'a> Extractor<'a> {
 
     fn program(&mut self, root: Node) {
         for node in named_children(root) {
+            if node.kind() == "expression_statement" {
+                self.walk(node, None, None);
+            }
             self.statement(node, false);
         }
     }
@@ -156,8 +232,14 @@ impl<'a> Extractor<'a> {
         let is_default = has_token(node, "default");
 
         if let Some(decl) = node.child_by_field_name("declaration") {
+            self.class_decorators = children(node)
+                .into_iter()
+                .filter(|c| c.kind() == "decorator")
+                .filter_map(|c| self.decorator(c))
+                .collect();
             let before = self.out.symbols.len();
             self.statement(decl, true);
+            self.class_decorators.clear();
             if is_default && self.out.symbols.len() > before {
                 self.out.default_export = Some(self.out.symbols[before].name.clone());
             }
@@ -382,8 +464,236 @@ impl<'a> Extractor<'a> {
                 self.class_member(member, &generics, &mut symbol.members, &mut refs);
             }
         }
+        let own: Vec<Decorator> = children(node)
+            .into_iter()
+            .filter(|c| c.kind() == "decorator")
+            .filter_map(|c| self.decorator(c))
+            .collect();
+        let decorators = std::mem::take(&mut self.class_decorators);
+        for decorator in decorators.into_iter().chain(own) {
+            self.out.facts.decorators.push(DecoratorSite {
+                symbol_id: symbol.id.clone(),
+                target: DecoratorTarget::Class,
+                decorator,
+            });
+        }
+        if let Some(body) = node.child_by_field_name("body") {
+            self.class_facts(body, &symbol.id.clone());
+        }
         self.out.symbols.push(symbol);
         self.out.refs.push(refs);
+    }
+
+    /// Member and parameter decorators, and the calls each member makes.
+    fn class_facts(&mut self, body: Node, symbol_id: &str) {
+        let mut pending: Vec<Decorator> = vec![];
+        for child in named_children(body) {
+            if child.kind() == "decorator" {
+                pending.extend(self.decorator(child));
+                continue;
+            }
+            let Some(name) = child.child_by_field_name("name") else {
+                pending.clear();
+                continue;
+            };
+            let member = self.text(name).to_string();
+            let own: Vec<Decorator> = children(child)
+                .into_iter()
+                .filter(|c| c.kind() == "decorator")
+                .filter_map(|c| self.decorator(c))
+                .collect();
+            for decorator in pending.drain(..).chain(own) {
+                self.out.facts.decorators.push(DecoratorSite {
+                    symbol_id: symbol_id.into(),
+                    target: DecoratorTarget::Member(member.clone()),
+                    decorator,
+                });
+            }
+            if let Some(params) = child.child_by_field_name("parameters") {
+                for param in named_children(params) {
+                    let Some(pattern) = param.child_by_field_name("pattern") else {
+                        continue;
+                    };
+                    let param_name = self.text(pattern).to_string();
+                    for dec in children(param)
+                        .into_iter()
+                        .filter(|c| c.kind() == "decorator")
+                    {
+                        if let Some(decorator) = self.decorator(dec) {
+                            self.out.facts.decorators.push(DecoratorSite {
+                                symbol_id: symbol_id.into(),
+                                target: DecoratorTarget::Param {
+                                    member: member.clone(),
+                                    param: param_name.clone(),
+                                },
+                                decorator,
+                            });
+                        }
+                    }
+                }
+            }
+            if let Some(code) = child
+                .child_by_field_name("body")
+                .or_else(|| child.child_by_field_name("value"))
+            {
+                self.walk(code, Some(symbol_id), Some(&member));
+            }
+        }
+    }
+
+    fn decorator(&self, node: Node) -> Option<Decorator> {
+        let inner = named_children(node).into_iter().next()?;
+        let (callee, args) = match inner.kind() {
+            "call_expression" => (
+                inner.child_by_field_name("function")?,
+                inner.child_by_field_name("arguments"),
+            ),
+            _ => (inner, None),
+        };
+        let mut decorator = Decorator {
+            name: self.text(callee).rsplit('.').next()?.to_string(),
+            ..Default::default()
+        };
+        for arg in args.map(named_children).unwrap_or_default() {
+            match arg.kind() {
+                "string" | "template_string" => decorator.strings.push(self.literal(arg)),
+                "identifier" => decorator.idents.push(self.text(arg).into()),
+                "object" => {
+                    for pair in named_children(arg)
+                        .into_iter()
+                        .filter(|p| p.kind() == "pair")
+                    {
+                        let (Some(key), Some(value)) = (
+                            pair.child_by_field_name("key"),
+                            pair.child_by_field_name("value"),
+                        ) else {
+                            continue;
+                        };
+                        decorator
+                            .fields
+                            .push((self.string_value(key), self.list_values(value)));
+                    }
+                }
+                _ => {}
+            }
+        }
+        Some(decorator)
+    }
+
+    /// Identifiers and strings in `[A, B, 'c']` or a single value.
+    fn list_values(&self, node: Node) -> Vec<String> {
+        let items = if node.kind() == "array" {
+            named_children(node)
+        } else {
+            vec![node]
+        };
+        items
+            .into_iter()
+            .filter_map(|n| match n.kind() {
+                "identifier" | "member_expression" => Some(self.text(n).to_string()),
+                "string" | "template_string" => Some(self.literal(n)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A string or template literal's text; template holes become `*`.
+    fn literal(&self, node: Node) -> String {
+        if node.kind() != "template_string" {
+            return self.string_value(node);
+        }
+        let mut out = String::new();
+        for part in children(node) {
+            match part.kind() {
+                "`" => {}
+                "template_substitution" => out.push('*'),
+                _ => out.push_str(self.text(part)),
+            }
+        }
+        out
+    }
+
+    /// Records calls and JSX under `node`, attributed to the enclosing symbol and member.
+    fn walk(&mut self, node: Node, symbol: Option<&str>, member: Option<&str>) {
+        match node.kind() {
+            "call_expression" => self.call(node, symbol, member),
+            "jsx_opening_element" | "jsx_self_closing_element" => {
+                if let Some(name) = node.child_by_field_name("name") {
+                    let name = self.text(name);
+                    let last = name.rsplit('.').next().unwrap_or(name);
+                    if last.starts_with(|c: char| c.is_ascii_uppercase()) {
+                        self.out.facts.jsx.push(JsxUse {
+                            symbol_id: symbol.map(Into::into),
+                            name: name.into(),
+                            line: node.start_position().row as u32 + 1,
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+        for child in named_children(node) {
+            self.walk(child, symbol, member);
+        }
+    }
+
+    fn call(&mut self, node: Node, symbol: Option<&str>, member: Option<&str>) {
+        let Some(callee) = node.child_by_field_name("function") else {
+            return;
+        };
+        let (object, method) = match callee.kind() {
+            "identifier" => (vec![], self.text(callee).to_string()),
+            "member_expression" => {
+                let (Some(object), Some(property)) = (
+                    callee.child_by_field_name("object"),
+                    callee.child_by_field_name("property"),
+                ) else {
+                    return;
+                };
+                let Some(path) = self.object_path(object) else {
+                    return;
+                };
+                (path, self.text(property).to_string())
+            }
+            _ => return,
+        };
+        if is_noise(&object, &method) {
+            return;
+        }
+        let mut site = CallSite {
+            symbol_id: symbol.map(Into::into),
+            member: member.map(Into::into),
+            object,
+            method,
+            line: node.start_position().row as u32 + 1,
+            ..Default::default()
+        };
+        if let Some(args) = node.child_by_field_name("arguments") {
+            for arg in named_children(args) {
+                match arg.kind() {
+                    "string" | "template_string" => site.strings.push(self.literal(arg)),
+                    "identifier" => site.idents.push(self.text(arg).into()),
+                    _ => {}
+                }
+            }
+        }
+        self.out.facts.calls.push(site);
+    }
+
+    /// `this.repo` → `["this", "repo"]`; `None` when the object isn't a plain path.
+    fn object_path(&self, node: Node) -> Option<Vec<String>> {
+        match node.kind() {
+            "this" | "super" | "identifier" => Some(vec![self.text(node).into()]),
+            "member_expression" => {
+                let mut path = self.object_path(node.child_by_field_name("object")?)?;
+                path.push(self.text(node.child_by_field_name("property")?).into());
+                Some(path)
+            }
+            "non_null_expression" | "parenthesized_expression" => {
+                self.object_path(named_children(node).into_iter().next()?)
+            }
+            _ => None,
+        }
     }
 
     /// Type names in an `implements`/`extends` type list (`A, B<T>, ns.C`).
@@ -689,7 +999,27 @@ impl<'a> Extractor<'a> {
                         continue;
                     }
                 }
-                _ => {}
+                _ => {
+                    let name = self.text(name).to_string();
+                    // `const Card = memo(() => …)`: a wrapped component is still a function.
+                    let wrapped = (value.kind() == "call_expression"
+                        && name.starts_with(|c: char| c.is_ascii_uppercase()))
+                    .then(|| value.child_by_field_name("arguments"))
+                    .flatten()
+                    .and_then(|args| named_children(args).into_iter().next())
+                    .filter(|f| matches!(f.kind(), "arrow_function" | "function_expression"));
+                    match wrapped {
+                        Some(func) => self.function_like(
+                            decl,
+                            func,
+                            &name,
+                            exported,
+                            has_token(func, "async"),
+                        ),
+                        // Module-level wiring like `const app = express()`.
+                        None => self.walk(value, None, None),
+                    }
+                }
             }
         }
     }
@@ -735,8 +1065,12 @@ impl<'a> Extractor<'a> {
         }
         let mut symbol = self.symbol(outer, SymbolKind::Function, name, exported, signature);
         symbol.type_params = type_params;
+        let id = symbol.id.clone();
         self.out.symbols.push(symbol);
         self.out.refs.push(refs);
+        if let Some(body) = func.child_by_field_name("body") {
+            self.walk(body, Some(&id), None);
+        }
     }
 }
 
@@ -1033,5 +1367,110 @@ export default class Main {}
             }
         );
         assert_eq!(a.members[0].line, 4);
+    }
+
+    #[test]
+    fn extracts_decorators_on_classes_members_and_params() {
+        let f = parse(
+            "claims.controller.ts",
+            r#"
+@Controller('claims')
+export class ClaimsController {
+  constructor(private readonly claims: ClaimsService, @InjectRepository(Claim) private repo: Repository<Claim>) {}
+  @Get(':id')
+  find(@Param('id') id: string) { return this.claims.find(id); }
+}
+@Module({ providers: [A, B], controllers: [ClaimsController] })
+export class ClaimsModule {}
+"#,
+        );
+        let d = &f.facts.decorators;
+        let find = |name: &str| d.iter().find(|s| s.decorator.name == name).unwrap();
+        assert_eq!(find("Controller").target, DecoratorTarget::Class);
+        assert_eq!(find("Controller").decorator.strings, ["claims"]);
+        assert_eq!(find("Get").target, DecoratorTarget::Member("find".into()));
+        assert_eq!(
+            find("InjectRepository").target,
+            DecoratorTarget::Param {
+                member: "constructor".into(),
+                param: "repo".into()
+            }
+        );
+        assert_eq!(find("InjectRepository").decorator.idents, ["Claim"]);
+        assert_eq!(
+            find("Module").decorator.fields,
+            [
+                (
+                    "providers".to_string(),
+                    vec!["A".to_string(), "B".to_string()]
+                ),
+                (
+                    "controllers".to_string(),
+                    vec!["ClaimsController".to_string()]
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn extracts_calls_with_their_receivers_and_literals() {
+        let f = parse(
+            "svc.ts",
+            r#"
+export class Svc {
+  handle = async () => { this.events.emit('claim.created', 1); };
+  run(id: string) {
+    console.log(id);
+    return this.repo.save(id).then(() => fetch(`${base}/claims/${id}`));
+  }
+}
+const app = express();
+app.use('/api', router);
+"#,
+        );
+        let calls: Vec<_> = f
+            .facts
+            .calls
+            .iter()
+            .map(|c| (c.member.as_deref(), c.object.join("."), c.method.as_str()))
+            .collect();
+        assert_eq!(
+            calls,
+            [
+                (Some("handle"), "this.events".into(), "emit"),
+                (Some("run"), "this.repo".into(), "save"),
+                (Some("run"), "".into(), "fetch"),
+                (None, "".into(), "express"),
+                (None, "app".into(), "use"),
+            ]
+        );
+        let fetch = &f.facts.calls[2];
+        assert_eq!(fetch.strings, ["*/claims/*"]);
+        assert_eq!(fetch.symbol_id.as_deref(), Some("svc.ts#Svc"));
+        assert_eq!(f.facts.calls[4].idents, ["router"]);
+    }
+
+    #[test]
+    fn extracts_jsx_and_hooks_in_components() {
+        let f = parse(
+            "page.tsx",
+            "export function Page() { const q = useClaims(); return <Layout><ClaimForm a={1}/><div/></Layout> }\nexport const Card = memo(() => <Badge />)",
+        );
+        let jsx: Vec<_> = f
+            .facts
+            .jsx
+            .iter()
+            .map(|j| (j.symbol_id.as_deref().unwrap(), j.name.as_str()))
+            .collect();
+        assert_eq!(
+            jsx,
+            [
+                ("page.tsx#Page", "Layout"),
+                ("page.tsx#Page", "ClaimForm"),
+                ("page.tsx#Card", "Badge")
+            ]
+        );
+        assert_eq!(f.facts.calls[0].method, "useClaims");
+        assert!(f.symbols.iter().any(|s| s.name == "Card"));
     }
 }
