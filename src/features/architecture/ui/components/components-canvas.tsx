@@ -36,6 +36,8 @@ const edgeTypes = { system: SystemEdgeView }
 
 /** Edge labels are drawn for every edge only when the view is this small. */
 const LABEL_ALL_EDGES = 40
+/** Viewport culling kicks in above this many nodes. */
+const CULL_ABOVE = 400
 
 interface CanvasProps {
   system: SystemView
@@ -54,11 +56,16 @@ function Canvas({ system, onShowCode }: CanvasProps) {
   const [multi, setMulti] = useState<string[]>([])
   const [mergeName, setMergeName] = useState("")
   const [searchOpen, setSearchOpen] = useState(false)
-  const [hovered, setHovered] = useState<string | null>(null)
-  // Hovering previews a node's connections; selection wins.
-  const focusNode = selected ?? hovered
+  // Remembers which view the hover happened in, so it can't outlive that view.
+  const [hover, setHover] = useState<{ id: string; view: unknown } | null>(null)
+
 
   const view = useMemo(() => buildComponentsView(model, focus, filters), [model, focus, filters])
+  // Hovering previews a node's connections; selection wins. Only nodes in the
+  // view count: a stale id (left without a mouseleave) would dim every edge.
+  const inView = (id: string | null) => (id && view.nodes.some((n) => n.id === id) ? id : null)
+  const hovered = hover?.view === view ? hover.id : null
+  const focusNode = inView(selected) ?? inView(hovered)
   const signature = useMemo(() => systemLayoutSignature(view), [view])
   const latest = useRef(view)
   useEffect(() => {
@@ -212,8 +219,8 @@ function Canvas({ system, onShowCode }: CanvasProps) {
             const picked = model.nodes.find((n) => n.id === node.id)
             if (picked) changes.ack(picked.symbolIds)
           }}
-          onNodeMouseEnter={(_, node) => node.type !== "lane" && setHovered(node.id)}
-          onNodeMouseLeave={() => setHovered(null)}
+          onNodeMouseEnter={(_, node) => node.type !== "lane" && setHover({ id: node.id, view })}
+          onNodeMouseLeave={() => setHover(null)}
           onNodeDoubleClick={(_, node) => {
             if (node.type === "feature") ui.focus(node.id)
           }}
@@ -222,7 +229,8 @@ function Canvas({ system, onShowCode }: CanvasProps) {
             setMulti((prev) => (prev.length ? [] : prev))
           }}
           proOptions={{ hideAttribution: true }}
-          onlyRenderVisibleElements
+          // Culling can drop edges whose ends are offscreen; only worth it on huge views.
+          onlyRenderVisibleElements={view.nodes.length > CULL_ABOVE}
         >
           <SystemMarkers />
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
