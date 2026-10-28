@@ -64,6 +64,23 @@ pub struct AppPaths {
 /// Orchestrated tasks running at once, unless a shell says otherwise.
 pub const DEFAULT_CONCURRENCY: usize = 3;
 
+/// Shell-specific choices.
+#[derive(Debug, Clone)]
+pub struct CoreOptions {
+    pub concurrency: usize,
+    /// MCP config pointing at Ensombl's bridge; adds the lead agent profile.
+    pub lead_mcp_config: Option<PathBuf>,
+}
+
+impl Default for CoreOptions {
+    fn default() -> Self {
+        Self {
+            concurrency: DEFAULT_CONCURRENCY,
+            lead_mcp_config: None,
+        }
+    }
+}
+
 pub const INDEX_PROGRESS: &str = "index://progress";
 pub const MODEL_UPDATED: &str = "index://updated";
 
@@ -143,6 +160,14 @@ pub struct Core {
 
 impl Core {
     pub fn build(paths: AppPaths, bus: Arc<dyn EventBus>) -> Result<Core> {
+        Self::build_with(paths, bus, CoreOptions::default())
+    }
+
+    pub fn build_with(
+        paths: AppPaths,
+        bus: Arc<dyn EventBus>,
+        options: CoreOptions,
+    ) -> Result<Core> {
         let AppPaths {
             data_dir,
             worktrees_dir,
@@ -189,7 +214,10 @@ impl Core {
         let decisions = Arc::new(JsonDecisions::open(data_dir.join("patterns.json")));
         let shell = Arc::new(LoginShell::detect());
         let terminals = Arc::new(TerminalRegistry::default());
-        let profiles = AgentProfile::builtin();
+        let mut profiles = AgentProfile::builtin();
+        if let Some(config) = &options.lead_mcp_config {
+            profiles.insert(1, AgentProfile::lead(&config.to_string_lossy()));
+        }
 
         let terminal_commands = Arc::new(TerminalCommands::new(
             Arc::new(Worktrees::new(sessions.clone(), Some(tasks.clone()))),
@@ -214,7 +242,7 @@ impl Core {
             bus,
             clock: Arc::new(SystemClock),
             worktrees_dir: worktrees_dir.clone(),
-            concurrency: DEFAULT_CONCURRENCY,
+            concurrency: options.concurrency,
         }));
         task_commands.recover()?;
         task_commands.dispatch();
