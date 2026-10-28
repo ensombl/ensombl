@@ -102,8 +102,8 @@ pub trait FileWatcher: Send + Sync {
 /// Progress and change notifications for the UI.
 pub trait IndexEvents: Send + Sync {
     fn progress(&self, worktree: &str, done: usize, total: usize);
-    /// The model changed; `changed` lists symbol ids that were added or modified.
-    fn updated(&self, worktree: &str, changed: &[String], removed: &[String]);
+    /// The model changed. `None` means it was rebuilt from scratch (refetch it).
+    fn updated(&self, worktree: &str, delta: Option<&crate::domain::model::ModelDelta>);
 }
 
 // Terminals

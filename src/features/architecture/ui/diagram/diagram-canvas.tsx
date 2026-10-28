@@ -15,7 +15,7 @@ import {
 import type { ArchModel } from "@/shared/bindings/ArchModel"
 import { useIsActiveWorkspace } from "@/shared/workspace/workspace-context"
 
-import { flattenLayout, toElkGraph, type Layout } from "../../layout/elk-graph"
+import { flattenLayout, layoutSignature, toElkGraph, type Layout } from "../../layout/elk-graph"
 import { runLayout } from "../../layout/run-layout"
 import { useChanges } from "../../model/changes-store"
 import { useDiagram } from "../../model/diagram-store"
@@ -57,9 +57,15 @@ function Canvas({ model }: { model: ArchModel }) {
     [model, state.expanded, state.filters, selected, layoutView],
   )
 
+  // Only re-run ELK when the structure changed, so live edits don't shuffle the map.
+  const signature = useMemo(() => layoutSignature(layoutView), [layoutView])
+  const latestView = useRef(layoutView)
+  useEffect(() => {
+    latestView.current = layoutView
+  })
   useEffect(() => {
     let cancelled = false
-    const { graph, routed } = toElkGraph(layoutView)
+    const { graph, routed } = toElkGraph(latestView.current)
     runLayout(graph)
       .then((result) => {
         if (!cancelled) setLayout({ layout: flattenLayout(result), routed })
@@ -68,7 +74,7 @@ function Canvas({ model }: { model: ArchModel }) {
     return () => {
       cancelled = true
     }
-  }, [layoutView])
+  }, [signature])
 
   // Changed symbols mark themselves and every group that contains them.
   const changes = useChanges()

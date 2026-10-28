@@ -129,7 +129,19 @@ function compress(seg: string, node: TrieNode): { label: string; node: TrieNode 
 
 const sortedChildren = (node: TrieNode) => [...node.children].sort(([a], [b]) => a.localeCompare(b))
 
+// Building the hierarchy walks every symbol; cache it per symbol array.
+const hierarchyCache = new WeakMap<SymbolNode[], Hierarchy>()
+
 export function buildHierarchy(symbols: SymbolNode[]): Hierarchy {
+  let cached = hierarchyCache.get(symbols)
+  if (!cached) {
+    cached = computeHierarchy(symbols)
+    hierarchyCache.set(symbols, cached)
+  }
+  return cached
+}
+
+function computeHierarchy(symbols: SymbolNode[]): Hierarchy {
   const byPackage = new Map<string, SymbolNode[]>()
   for (const s of symbols) {
     const list = byPackage.get(s.package) ?? []
@@ -184,10 +196,24 @@ export function buildHierarchy(symbols: SymbolNode[]): Hierarchy {
   return { packages, folders, ancestors }
 }
 
+const filterCache = new WeakMap<SymbolNode[], Map<string, SymbolNode[]>>()
+
+/** Symbols passing the filters; the same array is returned for the same inputs so caches hit. */
 export function filterSymbols(model: ArchModel, filters: ViewFilters): SymbolNode[] {
-  return model.symbols.filter(
-    (s) => (!filters.hideTests || !TEST_FILE.test(s.file)) && (filters.showFunctions || STRUCTURAL.has(s.kind)),
-  )
+  const key = `${filters.hideTests}:${filters.showFunctions}`
+  let byKey = filterCache.get(model.symbols)
+  if (!byKey) {
+    byKey = new Map()
+    filterCache.set(model.symbols, byKey)
+  }
+  let result = byKey.get(key)
+  if (!result) {
+    result = model.symbols.filter(
+      (s) => (!filters.hideTests || !TEST_FILE.test(s.file)) && (filters.showFunctions || STRUCTURAL.has(s.kind)),
+    )
+    byKey.set(key, result)
+  }
+  return result
 }
 
 /** Small models start fully expanded; big ones start at package level. */
