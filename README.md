@@ -30,6 +30,7 @@ src/
   features/<name>/
     queries/        useQuery hooks over backend queries
     commands/       useMutation hooks over backend commands
+    model/          client-only UI state (zustand)
     ui/             feature components (shadcn/ui only)
   shared/
     ipc/client.ts   the only module that talks to Tauri (`query` / `command`)

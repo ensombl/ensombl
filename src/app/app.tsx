@@ -1,7 +1,9 @@
-import { Bot, Code2, FolderOpen, Network, Plus } from "lucide-react"
+import { Bot, FolderOpen, Network, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { useAppInfo } from "@/features/app-info/queries/get-app-info"
+import { usePeekStore } from "@/features/peek/model/peek-store"
+import { PeekPanel } from "@/features/peek/ui/peek-panel"
 import { Pane, PaneEmpty } from "@/shared/ui/pane"
 
 import { AppShell } from "./layout/app-shell"
@@ -9,6 +11,7 @@ import { TitleBar } from "./layout/title-bar"
 
 export function App() {
   const { data: info } = useAppInfo()
+  const peekTarget = usePeekStore((s) => s.target)
 
   return (
     <div className="flex h-full flex-col">
@@ -27,15 +30,7 @@ export function App() {
             </PaneEmpty>
           </Pane>
         }
-        peek={
-          <Pane title="Peek" icon={<Code2 />}>
-            <PaneEmpty
-              icon={<Code2 />}
-              title="Nothing to peek"
-              description="Click a member on the diagram to see its code."
-            />
-          </Pane>
-        }
+        peek={peekTarget && <PeekPanel target={peekTarget} />}
         agents={
           <Pane
             title="Agents"
