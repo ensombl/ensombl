@@ -19,7 +19,10 @@ impl JsonSessions {
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
-        Self { path, cache: Mutex::new(session) }
+        Self {
+            path,
+            cache: Mutex::new(session),
+        }
     }
 
     fn persist(&self, session: &Session) -> Result<()> {
@@ -37,11 +40,18 @@ impl JsonSessions {
 
 impl SessionRepository for JsonSessions {
     fn get(&self) -> Result<Session> {
-        Ok(self.cache.lock().map_err(|e| Error::Storage(e.to_string()))?.clone())
+        Ok(self
+            .cache
+            .lock()
+            .map_err(|e| Error::Storage(e.to_string()))?
+            .clone())
     }
 
     fn update(&self, f: &mut dyn FnMut(&mut Session) -> Result<()>) -> Result<()> {
-        let mut guard = self.cache.lock().map_err(|e| Error::Storage(e.to_string()))?;
+        let mut guard = self
+            .cache
+            .lock()
+            .map_err(|e| Error::Storage(e.to_string()))?;
         let mut next = guard.clone();
         f(&mut next)?;
         self.persist(&next)?;
@@ -64,7 +74,10 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        assert_eq!(JsonSessions::open(path).get().unwrap().projects[0].name, "proj");
+        assert_eq!(
+            JsonSessions::open(path).get().unwrap().projects[0].name,
+            "proj"
+        );
     }
 
     #[test]

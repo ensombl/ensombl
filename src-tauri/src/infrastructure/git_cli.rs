@@ -16,7 +16,9 @@ fn git(dir: &Path, args: &[&str]) -> Result<String> {
         .output()
         .map_err(|e| Error::Git(format!("failed to run git: {e}")))?;
     if !out.status.success() {
-        return Err(Error::Git(String::from_utf8_lossy(&out.stderr).trim().to_string()));
+        return Err(Error::Git(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
@@ -41,7 +43,11 @@ fn parse_porcelain(out: &str) -> Vec<GitWorktreeInfo> {
                     return None;
                 }
             }
-            path.map(|path| GitWorktreeInfo { path, branch, is_main: false })
+            path.map(|path| GitWorktreeInfo {
+                path,
+                branch,
+                is_main: false,
+            })
         })
         .enumerate()
         .map(|(i, mut w)| {
@@ -53,21 +59,35 @@ fn parse_porcelain(out: &str) -> Vec<GitWorktreeInfo> {
 
 impl GitWorktrees for GitCli {
     fn toplevel(&self, path: &Path) -> Result<PathBuf> {
-        let out = git(path, &["rev-parse", "--show-toplevel"])
-            .map_err(|_| Error::Invalid(format!("{} is not inside a git repository", path.display())))?;
+        let out = git(path, &["rev-parse", "--show-toplevel"]).map_err(|_| {
+            Error::Invalid(format!("{} is not inside a git repository", path.display()))
+        })?;
         Ok(canonical(out.trim()))
     }
 
     fn list(&self, repo: &Path) -> Result<Vec<GitWorktreeInfo>> {
-        Ok(parse_porcelain(&git(repo, &["worktree", "list", "--porcelain"])?))
+        Ok(parse_porcelain(&git(
+            repo,
+            &["worktree", "list", "--porcelain"],
+        )?))
     }
 
     fn branches(&self, repo: &Path) -> Result<Vec<String>> {
-        let out = git(repo, &["for-each-ref", "--format=%(refname:short)", "refs/heads"])?;
+        let out = git(
+            repo,
+            &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+        )?;
         Ok(out.lines().map(str::to_string).collect())
     }
 
-    fn add(&self, repo: &Path, path: &Path, branch: &str, base: Option<&str>, create_branch: bool) -> Result<()> {
+    fn add(
+        &self,
+        repo: &Path,
+        path: &Path,
+        branch: &str,
+        base: Option<&str>,
+        create_branch: bool,
+    ) -> Result<()> {
         let path = path.to_string_lossy();
         let mut args = vec!["worktree", "add"];
         if create_branch {
@@ -96,7 +116,8 @@ mod tests {
 
     #[test]
     fn parses_porcelain_output() {
-        let out = "worktree /a\nHEAD 1\nbranch refs/heads/main\n\nworktree /b\nHEAD 2\ndetached\n\n";
+        let out =
+            "worktree /a\nHEAD 1\nbranch refs/heads/main\n\nworktree /b\nHEAD 2\ndetached\n\n";
         let list = parse_porcelain(out);
         assert_eq!(list.len(), 2);
         assert!(list[0].is_main);
@@ -111,7 +132,19 @@ mod tests {
         git(p, &["init", "-q", "-b", "main"]).unwrap();
         std::fs::write(p.join("a.txt"), "a").unwrap();
         git(p, &["add", "."]).unwrap();
-        git(p, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init"]).unwrap();
+        git(
+            p,
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "-qm",
+                "init",
+            ],
+        )
+        .unwrap();
         dir
     }
 
@@ -128,7 +161,11 @@ mod tests {
         assert_eq!(list[0].path, repo.path().canonicalize().unwrap());
         assert_eq!(list[1].branch.as_deref(), Some("feature"));
         assert_eq!(git.toplevel(&wt).unwrap(), wt.canonicalize().unwrap());
-        assert!(git.branches(repo.path()).unwrap().contains(&"feature".to_string()));
+        assert!(
+            git.branches(repo.path())
+                .unwrap()
+                .contains(&"feature".to_string())
+        );
 
         git.remove(repo.path(), &wt, false).unwrap();
         assert_eq!(git.list(repo.path()).unwrap().len(), 1);

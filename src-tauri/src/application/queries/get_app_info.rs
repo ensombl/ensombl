@@ -3,9 +3,9 @@ use std::sync::Arc;
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::application::Result;
 use crate::application::cqrs::{Query, QueryHandler};
 use crate::application::ports::BuildInfo;
-use crate::application::Result;
 
 pub struct GetAppInfo;
 
@@ -58,6 +58,12 @@ mod tests {
     fn returns_build_info() {
         let handler = GetAppInfoHandler::new(Arc::new(FakeBuild));
         let info = handler.handle(GetAppInfo).unwrap();
-        assert_eq!(info, AppInfo { name: "CRM".into(), version: "9.9.9".into() });
+        assert_eq!(
+            info,
+            AppInfo {
+                name: "CRM".into(),
+                version: "9.9.9".into()
+            }
+        );
     }
 }

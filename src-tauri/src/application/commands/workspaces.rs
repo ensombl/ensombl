@@ -113,8 +113,16 @@ pub struct WorkspaceCommands {
 }
 
 impl WorkspaceCommands {
-    pub fn new(git: Arc<dyn GitWorktrees>, sessions: Arc<dyn SessionRepository>, worktrees_dir: PathBuf) -> Self {
-        Self { git, sessions, worktrees_dir }
+    pub fn new(
+        git: Arc<dyn GitWorktrees>,
+        sessions: Arc<dyn SessionRepository>,
+        worktrees_dir: PathBuf,
+    ) -> Self {
+        Self {
+            git,
+            sessions,
+            worktrees_dir,
+        }
     }
 
     fn project_root(&self, project_id: &str) -> Result<PathBuf> {
@@ -131,18 +139,27 @@ impl WorkspaceCommands {
             .list(root)?
             .into_iter()
             .find(|w| w.path == path)
-            .ok_or_else(|| Error::Invalid(format!("{} is not a worktree of this project", path.display())))
+            .ok_or_else(|| {
+                Error::Invalid(format!(
+                    "{} is not a worktree of this project",
+                    path.display()
+                ))
+            })
     }
 
     fn open(&self, project_id: &str, info: GitWorktreeInfo) -> Result<WorktreeId> {
         let worktree = to_worktree(project_id, info);
         let id = worktree.id.clone();
-        self.sessions.update(&mut |s: &mut Session| Ok(s.open_tab(worktree.clone())?))?;
+        self.sessions
+            .update(&mut |s: &mut Session| Ok(s.open_tab(worktree.clone())?))?;
         Ok(id)
     }
 
     fn free_path(&self, project_name: &str, branch: &str) -> PathBuf {
-        let base = self.worktrees_dir.join(slug(project_name)).join(slug(branch));
+        let base = self
+            .worktrees_dir
+            .join(slug(project_name))
+            .join(slug(branch));
         let mut candidate = base.clone();
         let mut n = 2;
         while candidate.exists() {
@@ -193,7 +210,9 @@ impl CommandHandler<CreateWorktree> for WorkspaceCommands {
     fn handle(&self, cmd: CreateWorktree) -> Result<WorktreeId> {
         let branch = cmd.branch.trim();
         if branch.is_empty() || branch.contains(char::is_whitespace) {
-            return Err(Error::Invalid("branch name must be non-empty and contain no spaces".into()));
+            return Err(Error::Invalid(
+                "branch name must be non-empty and contain no spaces".into(),
+            ));
         }
         let root = self.project_root(&cmd.project_id)?;
         let exists = self.git.branches(&root)?.iter().any(|b| b == branch);
@@ -202,7 +221,8 @@ impl CommandHandler<CreateWorktree> for WorkspaceCommands {
             std::fs::create_dir_all(parent)?;
         }
 
-        self.git.add(&root, &path, branch, cmd.base.as_deref(), !exists)?;
+        self.git
+            .add(&root, &path, branch, cmd.base.as_deref(), !exists)?;
         let info = self.find_worktree(&root, &path)?;
         self.open(&cmd.project_id, info)
     }
@@ -236,25 +256,29 @@ impl CommandHandler<RemoveWorktree> for WorkspaceCommands {
 
 impl CommandHandler<CloseTab> for WorkspaceCommands {
     fn handle(&self, cmd: CloseTab) -> Result<()> {
-        self.sessions.update(&mut |s: &mut Session| Ok(s.close_tab(&cmd.worktree_id)?))
+        self.sessions
+            .update(&mut |s: &mut Session| Ok(s.close_tab(&cmd.worktree_id)?))
     }
 }
 
 impl CommandHandler<ActivateTab> for WorkspaceCommands {
     fn handle(&self, cmd: ActivateTab) -> Result<()> {
-        self.sessions.update(&mut |s: &mut Session| Ok(s.activate(&cmd.worktree_id)?))
+        self.sessions
+            .update(&mut |s: &mut Session| Ok(s.activate(&cmd.worktree_id)?))
     }
 }
 
 impl CommandHandler<ToggleGroup> for WorkspaceCommands {
     fn handle(&self, cmd: ToggleGroup) -> Result<()> {
-        self.sessions.update(&mut |s: &mut Session| Ok(s.toggle_group(&cmd.project_id)?))
+        self.sessions
+            .update(&mut |s: &mut Session| Ok(s.toggle_group(&cmd.project_id)?))
     }
 }
 
 impl CommandHandler<RemoveProject> for WorkspaceCommands {
     fn handle(&self, cmd: RemoveProject) -> Result<()> {
-        self.sessions.update(&mut |s: &mut Session| Ok(s.remove_project(&cmd.project_id)?))
+        self.sessions
+            .update(&mut |s: &mut Session| Ok(s.remove_project(&cmd.project_id)?))
     }
 }
 
@@ -284,8 +308,16 @@ mod tests {
         fn new() -> Self {
             Self {
                 worktrees: Mutex::new(vec![
-                    GitWorktreeInfo { path: "/repo".into(), branch: Some("main".into()), is_main: true },
-                    GitWorktreeInfo { path: "/wt/feature".into(), branch: Some("feature".into()), is_main: false },
+                    GitWorktreeInfo {
+                        path: "/repo".into(),
+                        branch: Some("main".into()),
+                        is_main: true,
+                    },
+                    GitWorktreeInfo {
+                        path: "/wt/feature".into(),
+                        branch: Some("feature".into()),
+                        is_main: false,
+                    },
                 ]),
                 added: Mutex::default(),
             }
@@ -293,7 +325,11 @@ mod tests {
     }
     impl GitWorktrees for FakeGit {
         fn toplevel(&self, path: &Path) -> Result<PathBuf> {
-            Ok(if path.starts_with("/wt/feature") { "/wt/feature".into() } else { "/repo".into() })
+            Ok(if path.starts_with("/wt/feature") {
+                "/wt/feature".into()
+            } else {
+                "/repo".into()
+            })
         }
         fn list(&self, _: &Path) -> Result<Vec<GitWorktreeInfo>> {
             Ok(self.worktrees.lock().unwrap().clone())
@@ -301,8 +337,18 @@ mod tests {
         fn branches(&self, _: &Path) -> Result<Vec<String>> {
             Ok(vec!["main".into(), "feature".into()])
         }
-        fn add(&self, _: &Path, path: &Path, branch: &str, _: Option<&str>, create: bool) -> Result<()> {
-            self.added.lock().unwrap().push((path.into(), branch.into(), create));
+        fn add(
+            &self,
+            _: &Path,
+            path: &Path,
+            branch: &str,
+            _: Option<&str>,
+            create: bool,
+        ) -> Result<()> {
+            self.added
+                .lock()
+                .unwrap()
+                .push((path.into(), branch.into(), create));
             self.worktrees.lock().unwrap().push(GitWorktreeInfo {
                 path: path.into(),
                 branch: Some(branch.into()),
@@ -316,7 +362,12 @@ mod tests {
         }
     }
 
-    fn setup() -> (WorkspaceCommands, Arc<FakeGit>, Arc<MemorySessions>, tempfile::TempDir) {
+    fn setup() -> (
+        WorkspaceCommands,
+        Arc<FakeGit>,
+        Arc<MemorySessions>,
+        tempfile::TempDir,
+    ) {
         let git = Arc::new(FakeGit::new());
         let sessions = Arc::new(MemorySessions::default());
         let dir = tempfile::tempdir().unwrap();
@@ -327,7 +378,11 @@ mod tests {
     #[test]
     fn adding_a_linked_worktree_registers_the_main_repo_as_project() {
         let (cmds, _, sessions, _d) = setup();
-        let id = cmds.handle(AddProject { path: "/wt/feature/src".into() }).unwrap();
+        let id = cmds
+            .handle(AddProject {
+                path: "/wt/feature/src".into(),
+            })
+            .unwrap();
         let s = sessions.get().unwrap();
         assert_eq!(s.projects[0].root, "/repo");
         assert_eq!(s.projects[0].name, "repo");
@@ -338,10 +393,18 @@ mod tests {
     #[test]
     fn create_worktree_makes_a_new_branch_under_the_worktrees_dir() {
         let (cmds, git, sessions, dir) = setup();
-        cmds.handle(AddProject { path: "/repo".into() }).unwrap();
+        cmds.handle(AddProject {
+            path: "/repo".into(),
+        })
+        .unwrap();
         let project_id = sessions.get().unwrap().projects[0].id.clone();
 
-        cmds.handle(CreateWorktree { project_id, branch: "feat/x".into(), base: None }).unwrap();
+        cmds.handle(CreateWorktree {
+            project_id,
+            branch: "feat/x".into(),
+            base: None,
+        })
+        .unwrap();
 
         let (path, branch, created) = git.added.lock().unwrap()[0].clone();
         assert_eq!(path, dir.path().join("repo").join("feat-x"));
@@ -353,36 +416,66 @@ mod tests {
     #[test]
     fn create_worktree_reuses_an_existing_branch() {
         let (cmds, git, sessions, _d) = setup();
-        cmds.handle(AddProject { path: "/repo".into() }).unwrap();
+        cmds.handle(AddProject {
+            path: "/repo".into(),
+        })
+        .unwrap();
         let project_id = sessions.get().unwrap().projects[0].id.clone();
-        cmds.handle(CreateWorktree { project_id, branch: "main".into(), base: None }).unwrap();
+        cmds.handle(CreateWorktree {
+            project_id,
+            branch: "main".into(),
+            base: None,
+        })
+        .unwrap();
         assert!(!git.added.lock().unwrap()[0].2);
     }
 
     #[test]
     fn create_worktree_rejects_bad_branch_names() {
         let (cmds, _, sessions, _d) = setup();
-        cmds.handle(AddProject { path: "/repo".into() }).unwrap();
+        cmds.handle(AddProject {
+            path: "/repo".into(),
+        })
+        .unwrap();
         let project_id = sessions.get().unwrap().projects[0].id.clone();
-        let err = cmds.handle(CreateWorktree { project_id, branch: "a b".into(), base: None });
+        let err = cmds.handle(CreateWorktree {
+            project_id,
+            branch: "a b".into(),
+            base: None,
+        });
         assert!(matches!(err, Err(Error::Invalid(_))));
     }
 
     #[test]
     fn the_main_worktree_cannot_be_removed() {
         let (cmds, _, sessions, _d) = setup();
-        cmds.handle(AddProject { path: "/repo".into() }).unwrap();
+        cmds.handle(AddProject {
+            path: "/repo".into(),
+        })
+        .unwrap();
         let project_id = sessions.get().unwrap().projects[0].id.clone();
-        let err = cmds.handle(RemoveWorktree { project_id, path: "/repo".into(), force: false });
+        let err = cmds.handle(RemoveWorktree {
+            project_id,
+            path: "/repo".into(),
+            force: false,
+        });
         assert!(matches!(err, Err(Error::Invalid(_))));
     }
 
     #[test]
     fn removing_a_worktree_closes_its_tab() {
         let (cmds, git, sessions, _d) = setup();
-        cmds.handle(AddProject { path: "/wt/feature".into() }).unwrap();
+        cmds.handle(AddProject {
+            path: "/wt/feature".into(),
+        })
+        .unwrap();
         let project_id = sessions.get().unwrap().projects[0].id.clone();
-        cmds.handle(RemoveWorktree { project_id, path: "/wt/feature".into(), force: false }).unwrap();
+        cmds.handle(RemoveWorktree {
+            project_id,
+            path: "/wt/feature".into(),
+            force: false,
+        })
+        .unwrap();
         assert!(sessions.get().unwrap().tabs.is_empty());
         assert_eq!(git.worktrees.lock().unwrap().len(), 1);
     }

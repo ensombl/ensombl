@@ -5,6 +5,7 @@ pub mod commands;
 pub mod cqrs;
 pub mod error;
 pub mod ids;
+pub mod index_registry;
 pub mod ports;
 pub mod queries;
 
