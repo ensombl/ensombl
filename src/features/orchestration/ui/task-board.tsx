@@ -58,6 +58,11 @@ function TaskCard({ task, selected, onSelect, coordination }: { task: Task; sele
         )}
         <span className="ml-auto shrink-0">{ago(task.updatedAt)}</span>
       </div>
+      {task.workflow && (
+        <p className="truncate text-[10px] text-sky-300" title={`Workflow run ${task.workflow.runId}`}>
+          {task.workflow.name} · {task.workflow.step}
+        </p>
+      )}
       {task.status === "failed" && task.error && <p className="line-clamp-2 text-[11px] text-red-300">{task.error}</p>}
     </button>
   )

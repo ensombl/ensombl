@@ -22,6 +22,8 @@ const task = (id: string, status: Task["status"], updatedAt: number): Task => ({
   error: null,
   createdAt: 0,
   updatedAt,
+  autoApprove: false,
+  workflow: null,
 })
 
 describe("byColumn", () => {

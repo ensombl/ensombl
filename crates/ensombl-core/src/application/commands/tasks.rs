@@ -17,7 +17,7 @@ use ts_rs::TS;
 use crate::application::cqrs::{Command, CommandHandler};
 use crate::application::ports::{
     AgentConnection, AgentLaunch, AgentRuntime, Clock, EventBus, GitWorktrees, RunLog,
-    SessionRepository, SettingsRepository, ShellEnvironment, TaskGit, TaskStore,
+    SessionRepository, SettingsRepository, ShellEnvironment, TaskGit, TaskStore, WorkflowStore,
 };
 use crate::application::{Error, Result};
 use crate::domain::agent_run::{PermissionDecision, PermissionMode, RunEvent};
@@ -26,6 +26,7 @@ use crate::domain::orchestration::{
     transition,
 };
 use crate::domain::terminal::AgentKind;
+use crate::domain::workflow::{WorkflowRef, expand};
 use crate::domain::workspace::ProjectId;
 
 /// What an orchestrated agent is told about its situation. Ensombl owns the
@@ -119,6 +120,19 @@ pub struct UpdateTaskBranch {
     pub task_id: TaskId,
 }
 
+/// Runs a workflow from the project's `.ensombl/workflows`: its steps become
+/// dependent tasks, queued.
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct StartWorkflow {
+    pub project_id: ProjectId,
+    /// The workflow file's name, without extension.
+    pub workflow: String,
+    pub input: String,
+    pub base_branch: String,
+}
+
 /// Cancels every queued or running task (of one project, or all).
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -163,6 +177,9 @@ impl Command for DeleteTask {
 impl Command for UpdateTaskBranch {
     type Output = ();
 }
+impl Command for StartWorkflow {
+    type Output = Vec<Task>;
+}
 impl Command for StopAllTasks {
     /// How many were stopped.
     type Output = u32;
@@ -183,6 +200,7 @@ pub struct TaskPorts {
     pub worktrees_dir: PathBuf,
     /// Holds how many tasks may run at once.
     pub settings: Arc<dyn SettingsRepository>,
+    pub workflows: Arc<dyn WorkflowStore>,
 }
 
 /// A run whose agent process is alive.
@@ -487,6 +505,12 @@ impl Inner {
                 let ended = match finished {
                     Ok(()) => {
                         self.end_run(task_id, RunOutcome::Completed);
+                        if self.get(task_id).is_ok_and(|t| t.auto_approve) {
+                            // A failed merge leaves it in review for a person.
+                            if let Err(e) = self.approve(task_id) {
+                                eprintln!("task {task_id}: couldn't merge automatically: {e}");
+                            }
+                        }
                         Ok(())
                     }
                     Err(error) => self.fail(task_id, error.to_string()),
@@ -529,6 +553,48 @@ impl Inner {
         );
         self.apply(task_id, TaskEvent::Failed { error })?;
         Ok(())
+    }
+
+    /// Merges a reviewed task and cleans up after it.
+    fn approve(&self, task_id: &str) -> Result<Task> {
+        let inner = self;
+        let task = inner.get(task_id)?;
+        if task.status != TaskStatus::Review {
+            return Err(Error::Invalid(format!(
+                "only a task in review can be approved, this one is {:?}",
+                task.status
+            )));
+        }
+        let (_, root) = inner.project_root(&task.project_id)?;
+        // Keep anything added by hand after the agent finished (take over).
+        if let Some(worktree) = task.worktree.as_deref().filter(|w| Path::new(w).is_dir()) {
+            inner
+                .ports
+                .task_git
+                .commit_all(Path::new(worktree), &task.title)?;
+        }
+        inner.ports.task_git.merge(
+            &root,
+            &task.base_branch,
+            &task.branch,
+            &format!("Merge task: {}", task.title),
+        )?;
+        inner.clean_up(&task, false)?;
+        let done = inner.apply(&task.id, TaskEvent::Approve)?;
+        // Other work in review on the same base catches up with this merge,
+        // where it can without conflicts; the rest shows as behind.
+        for other in inner.ports.tasks.list()? {
+            if other.status == TaskStatus::Review
+                && other.base_branch == task.base_branch
+                && let Some(worktree) = other.worktree.as_deref().filter(|w| Path::new(w).is_dir())
+            {
+                let _ = inner
+                    .ports
+                    .task_git
+                    .update_from_base(Path::new(worktree), &other.base_branch);
+            }
+        }
+        Ok(done)
     }
 
     /// Removes a task's worktree and branch, as far as they exist.
@@ -585,6 +651,8 @@ impl CommandHandler<CreateTask> for TaskCommands {
             permission: cmd.permission,
             session_id: None,
             next_prompt: None,
+            auto_approve: false,
+            workflow: None,
             summary: None,
             error: None,
             created_at: now,
@@ -654,45 +722,9 @@ impl CommandHandler<SendFollowUp> for TaskCommands {
 
 impl CommandHandler<ApproveTask> for TaskCommands {
     fn handle(&self, cmd: ApproveTask) -> Result<Task> {
-        let inner = &self.inner;
-        let task = inner.get(&cmd.task_id)?;
-        if task.status != TaskStatus::Review {
-            return Err(Error::Invalid(format!(
-                "only a task in review can be approved, this one is {:?}",
-                task.status
-            )));
-        }
-        let (_, root) = inner.project_root(&task.project_id)?;
-        // Keep anything added by hand after the agent finished (take over).
-        if let Some(worktree) = task.worktree.as_deref().filter(|w| Path::new(w).is_dir()) {
-            inner
-                .ports
-                .task_git
-                .commit_all(Path::new(worktree), &task.title)?;
-        }
-        inner.ports.task_git.merge(
-            &root,
-            &task.base_branch,
-            &task.branch,
-            &format!("Merge task: {}", task.title),
-        )?;
-        inner.clean_up(&task, false)?;
-        let done = inner.apply(&task.id, TaskEvent::Approve)?;
-        // Other work in review on the same base catches up with this merge,
-        // where it can without conflicts; the rest shows as behind.
-        for other in inner.ports.tasks.list()? {
-            if other.status == TaskStatus::Review
-                && other.base_branch == task.base_branch
-                && let Some(worktree) = other.worktree.as_deref().filter(|w| Path::new(w).is_dir())
-            {
-                let _ = inner
-                    .ports
-                    .task_git
-                    .update_from_base(Path::new(worktree), &other.base_branch);
-            }
-        }
+        let done = self.inner.approve(&cmd.task_id)?;
         // Tasks waiting on this one can start now.
-        Inner::dispatch(inner);
+        Inner::dispatch(&self.inner);
         Ok(done)
     }
 }
@@ -719,6 +751,61 @@ impl CommandHandler<UpdateTaskBranch> for TaskCommands {
             .task_git
             .update_from_base(Path::new(worktree), &task.base_branch)?;
         self.inner.save(&task)
+    }
+}
+
+impl CommandHandler<StartWorkflow> for TaskCommands {
+    fn handle(&self, cmd: StartWorkflow) -> Result<Vec<Task>> {
+        let inner = &self.inner;
+        let (_, root) = inner.project_root(&cmd.project_id)?;
+        let workflow = inner
+            .ports
+            .workflows
+            .list(&root)
+            .into_iter()
+            .find(|(name, _)| name == &cmd.workflow)
+            .ok_or_else(|| Error::Invalid(format!("no workflow named {}", cmd.workflow)))?
+            .1
+            .map_err(|e| Error::Invalid(format!("workflow {}: {e}", cmd.workflow)))?;
+        let run_id = inner.new_id();
+        let now = inner.now();
+        let mut created: Vec<Task> = Vec::new();
+        for planned in expand(&workflow, &cmd.input) {
+            let id = inner.new_id();
+            let task = Task {
+                branch: branch_name(&planned.title, &id),
+                id,
+                project_id: cmd.project_id.clone(),
+                title: planned.title,
+                prompt: planned.prompt,
+                agent: AgentKind::Claude,
+                base_branch: cmd.base_branch.clone(),
+                worktree: None,
+                status: TaskStatus::Queued,
+                depends_on: planned
+                    .depends_on
+                    .iter()
+                    .map(|&i| created[i].id.clone())
+                    .collect(),
+                permission: planned.permission,
+                session_id: None,
+                next_prompt: None,
+                summary: None,
+                error: None,
+                created_at: now,
+                updated_at: now,
+                auto_approve: planned.auto_approve,
+                workflow: Some(WorkflowRef {
+                    run_id: run_id.clone(),
+                    name: workflow.name.clone(),
+                    step: planned.step,
+                }),
+            };
+            inner.save(&task)?;
+            created.push(task);
+        }
+        Inner::dispatch(inner);
+        created.iter().map(|t| inner.get(&t.id)).collect()
     }
 }
 
@@ -946,6 +1033,20 @@ mod tests {
         }
     }
 
+    struct OneWorkflow;
+    impl WorkflowStore for OneWorkflow {
+        fn list(
+            &self,
+            _: &Path,
+        ) -> Vec<(
+            String,
+            std::result::Result<crate::domain::workflow::Workflow, String>,
+        )> {
+            let yaml = "name: Ship\nsteps:\n  - {id: plan, prompt: 'plan {{input}}', auto_approve: true}\n  - {id: build, prompt: 'build {{item}}', matrix: [a, b]}";
+            vec![("ship".into(), crate::domain::workflow::parse(yaml))]
+        }
+    }
+
     struct Limit(u32);
     impl SettingsRepository for Limit {
         fn get(&self) -> crate::application::ports::Settings {
@@ -1004,8 +1105,15 @@ mod tests {
                 clock: Arc::new(Ticks(AtomicU64::new(1))),
                 worktrees_dir: dirs.path().join("worktrees"),
                 settings: Arc::new(Limit(concurrency as u32)),
+                workflows: Arc::new(OneWorkflow),
             });
-            let queries = TaskQueries::new(tasks.clone(), log, sessions, git.clone());
+            let queries = TaskQueries::new(
+                tasks.clone(),
+                log,
+                sessions,
+                git.clone(),
+                Arc::new(OneWorkflow),
+            );
             Self {
                 cmds,
                 queries,
@@ -1128,6 +1236,41 @@ mod tests {
         let sent = h.runtime.lock().unwrap()[1].sent[0].clone();
         assert!(sent.contains("- Add API: Added /claims"), "{sent}");
         assert!(sent.ends_with("please Use API"));
+    }
+
+    #[test]
+    fn workflows_become_dependent_tasks_and_auto_approve_keeps_them_moving() {
+        let h = Harness::new(3);
+        let tasks = h
+            .cmds
+            .handle(StartWorkflow {
+                project_id: "p".into(),
+                workflow: "ship".into(),
+                input: "search".into(),
+                base_branch: "main".into(),
+            })
+            .unwrap();
+        assert_eq!(tasks.len(), 3);
+        assert_eq!(tasks[0].status, TaskStatus::Running);
+        assert_eq!(tasks[1].depends_on, [tasks[0].id.clone()]);
+        assert_eq!(tasks[1].workflow.as_ref().unwrap().step, "build");
+        assert_eq!(h.runtime.lock().unwrap()[0].sent[0], "plan search");
+        // The plan merges itself, which unblocks both builds.
+        h.finish(0, "planned");
+        assert_eq!(h.status(&tasks[0].id), TaskStatus::Done);
+        assert_eq!(h.status(&tasks[1].id), TaskStatus::Running);
+        assert_eq!(h.status(&tasks[2].id), TaskStatus::Running);
+        assert!(h.runtime.lock().unwrap()[1].sent[0].contains("- Ship: plan: planned"));
+        assert!(
+            h.cmds
+                .handle(StartWorkflow {
+                    project_id: "p".into(),
+                    workflow: "nope".into(),
+                    input: String::new(),
+                    base_branch: "main".into(),
+                })
+                .is_err()
+        );
     }
 
     #[test]
@@ -1447,6 +1590,7 @@ mod smoke {
             settings: Arc::new(crate::infrastructure::json_comments::JsonSettings::open(
                 dir.path().join("settings.json"),
             )),
+            workflows: Arc::new(crate::infrastructure::fs_workflows::FsWorkflows),
         });
         let task = cmds
             .handle(CreateTask {
@@ -1467,6 +1611,7 @@ mod smoke {
             Arc::new(JsonlRunLog::new(dir.path().join("runs"))),
             Arc::new(Sessions(Session::default())),
             Arc::new(GitCli),
+            Arc::new(crate::infrastructure::fs_workflows::FsWorkflows),
         );
         let finished = loop {
             let t = tasks.get(&task.id).unwrap().unwrap();

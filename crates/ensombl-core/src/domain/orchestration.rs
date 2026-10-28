@@ -7,6 +7,7 @@ use ts_rs::TS;
 
 use super::agent_run::PermissionMode;
 use super::terminal::AgentKind;
+use super::workflow::WorkflowRef;
 use super::workspace::ProjectId;
 
 pub type TaskId = String;
@@ -68,6 +69,12 @@ pub struct Task {
     pub created_at: u64,
     #[ts(type = "number")]
     pub updated_at: u64,
+    /// Merge as soon as the agent finishes (workflow steps that ask for it).
+    #[serde(default)]
+    pub auto_approve: bool,
+    /// The workflow run this task is a step of.
+    #[serde(default)]
+    pub workflow: Option<WorkflowRef>,
 }
 
 /// Something that happens to a task.
@@ -290,6 +297,8 @@ mod tests {
             permission: PermissionMode::AcceptEdits,
             session_id: None,
             next_prompt: None,
+            auto_approve: false,
+            workflow: None,
             summary: None,
             error: None,
             created_at,
