@@ -122,6 +122,8 @@ pub fn run() {
             cmd::send_follow_up,
             cmd::approve_task,
             cmd::delete_task,
+            cmd::get_coordination,
+            cmd::update_task_branch,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

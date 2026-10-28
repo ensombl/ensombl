@@ -17,7 +17,7 @@ use ensombl_core::application::commands::review::{
 };
 use ensombl_core::application::commands::tasks::{
     ApproveTask, CancelTask, CreateTask, DeleteTask, QueueTask, RespondToTask, RetryTask,
-    SendFollowUp,
+    SendFollowUp, UpdateTaskBranch,
 };
 use ensombl_core::application::commands::terminals::{
     CloseTerminal, ResizeTerminal, WriteTerminal,
@@ -34,7 +34,9 @@ use ensombl_core::application::queries::get_app_info::GetAppInfo;
 use ensombl_core::application::queries::model::GetModel;
 use ensombl_core::application::queries::patterns::GetPatterns;
 use ensombl_core::application::queries::review::{GetSettings, ListComments, ReadSource};
-use ensombl_core::application::queries::tasks::{GetRunLog, GetTask, GetTaskDiff, ListTasks};
+use ensombl_core::application::queries::tasks::{
+    GetCoordination, GetRunLog, GetTask, GetTaskDiff, ListTasks,
+};
 use ensombl_core::application::queries::terminals::{ListAgents, ListTerminals};
 use ensombl_core::application::queries::workspaces::{GetSession, ListBranches, ListWorktrees};
 use ensombl_core::application::{Error, Result};
@@ -116,6 +118,8 @@ pub const NAMES: &[&str] = &[
     "send_follow_up",
     "approve_task",
     "delete_task",
+    "get_coordination",
+    "update_task_branch",
 ];
 
 /// Runs the named command or query. Blocking: call it off the async runtime.
@@ -176,6 +180,8 @@ pub fn call(handlers: &Handlers, name: &str, input: Value) -> Result<Value> {
         "send_follow_up" => command::<SendFollowUp, _>(&*handlers.task_commands, input),
         "approve_task" => command::<ApproveTask, _>(&*handlers.task_commands, input),
         "delete_task" => command::<DeleteTask, _>(&*handlers.task_commands, input),
+        "get_coordination" => query::<GetCoordination, _>(&*handlers.task_queries, input),
+        "update_task_branch" => command::<UpdateTaskBranch, _>(&*handlers.task_commands, input),
         _ => Err(Error::Invalid(format!("unknown command {name}"))),
     }
 }

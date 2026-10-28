@@ -1,7 +1,8 @@
-import { GitBranch, Link2, Loader2 } from "lucide-react"
+import { GitBranch, Link2, Loader2, TriangleAlert } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { Task } from "@/shared/bindings/Task"
+import type { TaskCoordination } from "@/shared/bindings/TaskCoordination"
 
 import { AgentIcon } from "@/features/agents/ui/agent-icon"
 
@@ -15,7 +16,16 @@ function ago(ms: number) {
   return `${Math.round(s / 86400)}d ago`
 }
 
-function TaskCard({ task, selected, onSelect }: { task: Task; selected: boolean; onSelect: () => void }) {
+/** Why a task might not merge cleanly, in a few words; `null` when it should. */
+export function trouble(c: TaskCoordination | undefined): string | null {
+  if (!c) return null
+  if (c.conflicts.length) return `Conflicts with its base in ${c.conflicts.length} file${c.conflicts.length > 1 ? "s" : ""}`
+  if (c.overlaps.length) return `Touches the same files as ${c.overlaps.length} other task${c.overlaps.length > 1 ? "s" : ""}`
+  return null
+}
+
+function TaskCard({ task, selected, onSelect, coordination }: { task: Task; selected: boolean; onSelect: () => void; coordination?: TaskCoordination }) {
+  const warning = trouble(coordination)
   return (
     <button
       type="button"
@@ -32,6 +42,7 @@ function TaskCard({ task, selected, onSelect }: { task: Task; selected: boolean;
           <AgentIcon kind={task.agent} className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         )}
         <span className="min-w-0 flex-1 text-xs leading-snug font-medium break-words">{task.title}</span>
+        {warning && <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-amber-400" aria-label={warning} />}
         {task.status === "needsInput" && <span className="mt-1 size-2 shrink-0 rounded-full bg-amber-400" title={STATUS_LABEL.needsInput} />}
       </div>
       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
@@ -53,7 +64,17 @@ function TaskCard({ task, selected, onSelect }: { task: Task; selected: boolean;
 }
 
 /** Tasks in columns by status. */
-export function TaskBoard({ tasks, selected, onSelect }: { tasks: Task[]; selected: string | null; onSelect: (id: string) => void }) {
+export function TaskBoard({
+  tasks,
+  coordination,
+  selected,
+  onSelect,
+}: {
+  tasks: Task[]
+  coordination: TaskCoordination[]
+  selected: string | null
+  onSelect: (id: string) => void
+}) {
   const columns = byColumn(tasks)
   return (
     <div className="flex h-full gap-2 overflow-x-auto p-2">
@@ -65,7 +86,13 @@ export function TaskBoard({ tasks, selected, onSelect }: { tasks: Task[]; select
           </h3>
           <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-1.5 pb-1.5">
             {columns[column.id].map((task) => (
-              <TaskCard key={task.id} task={task} selected={task.id === selected} onSelect={() => onSelect(task.id)} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                selected={task.id === selected}
+                onSelect={() => onSelect(task.id)}
+                coordination={coordination.find((c) => c.taskId === task.id)}
+              />
             ))}
           </div>
         </section>

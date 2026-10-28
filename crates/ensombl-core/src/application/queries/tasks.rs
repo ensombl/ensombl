@@ -45,6 +45,37 @@ pub struct GetTaskDiff {
     pub task_id: TaskId,
 }
 
+/// How a project's active tasks relate to each other and their base.
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GetCoordination {
+    pub project_id: ProjectId,
+}
+
+/// Files two tasks are both changing.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Overlap {
+    pub task_id: TaskId,
+    pub files: Vec<String>,
+}
+
+/// Where a running or reviewed task stands against the others.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TaskCoordination {
+    pub task_id: TaskId,
+    /// Commits on the base since the task branched (or last caught up).
+    pub behind: u32,
+    /// Files that would conflict merging into the base now.
+    pub conflicts: Vec<String>,
+    /// Other active tasks touching the same files.
+    pub overlaps: Vec<Overlap>,
+}
+
 /// The prompt a blocked task waits on.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -78,6 +109,9 @@ impl Query for GetRunLog {
 }
 impl Query for GetTaskDiff {
     type Output = String;
+}
+impl Query for GetCoordination {
+    type Output = Vec<TaskCoordination>;
 }
 
 /// The last permission request in `events` that hasn't been resolved.
@@ -141,6 +175,91 @@ impl TaskQueries {
     }
 }
 
+impl TaskQueries {
+    fn project_root(&self, project_id: &str) -> Result<PathBuf> {
+        self.sessions
+            .get()?
+            .project(project_id)
+            .map(|p| PathBuf::from(&p.root))
+            .ok_or_else(|| Error::Invalid(format!("no project {project_id}")))
+    }
+}
+
+/// Pairs up tasks that touch the same files.
+pub fn overlaps(changed: &[(TaskId, Vec<String>)]) -> Vec<(TaskId, Vec<Overlap>)> {
+    changed
+        .iter()
+        .map(|(id, files)| {
+            let found = changed
+                .iter()
+                .filter(|(other, _)| other != id)
+                .filter_map(|(other, theirs)| {
+                    let mut shared: Vec<String> = files
+                        .iter()
+                        .filter(|f| theirs.contains(f))
+                        .cloned()
+                        .collect();
+                    shared.sort();
+                    shared.dedup();
+                    (!shared.is_empty()).then(|| Overlap {
+                        task_id: other.clone(),
+                        files: shared,
+                    })
+                })
+                .collect();
+            (id.clone(), found)
+        })
+        .collect()
+}
+
+impl QueryHandler<GetCoordination> for TaskQueries {
+    fn handle(&self, q: GetCoordination) -> Result<Vec<TaskCoordination>> {
+        let root = self.project_root(&q.project_id)?;
+        let active: Vec<Task> = self
+            .tasks
+            .list()?
+            .into_iter()
+            .filter(|t| t.project_id == q.project_id)
+            .filter(|t| t.status.is_active() || t.status == TaskStatus::Review)
+            .collect();
+        let branches = active.iter().map(|t| {
+            let mut files = self
+                .git
+                .changed_files(&root, &t.base_branch, &t.branch)
+                .unwrap_or_default();
+            if let Some(w) = t
+                .worktree
+                .as_deref()
+                .filter(|w| std::path::Path::new(w).is_dir())
+            {
+                files.extend(
+                    self.git
+                        .uncommitted(std::path::Path::new(w))
+                        .unwrap_or_default(),
+                );
+            }
+            (t.id.clone(), files)
+        });
+        let changed: Vec<_> = branches.collect();
+        Ok(overlaps(&changed)
+            .into_iter()
+            .zip(&active)
+            .map(|((task_id, overlaps), t)| TaskCoordination {
+                task_id,
+                behind: self
+                    .git
+                    .behind(&root, &t.base_branch, &t.branch)
+                    .unwrap_or(0) as u32,
+                conflicts: self
+                    .git
+                    .conflicts(&root, &t.base_branch, &t.branch)
+                    .unwrap_or_default(),
+                overlaps,
+            })
+            .collect())
+    }
+}
+
 impl QueryHandler<ListTasks> for TaskQueries {
     fn handle(&self, q: ListTasks) -> Result<Vec<Task>> {
         let mut tasks = self.tasks.list()?;
@@ -199,6 +318,24 @@ mod tests {
             input: json!({ "command": "rm -rf build" }),
             description: None,
         }
+    }
+
+    #[test]
+    fn finds_tasks_touching_the_same_files() {
+        let found = overlaps(&[
+            ("a".into(), vec!["x.ts".into(), "y.ts".into()]),
+            ("b".into(), vec!["y.ts".into(), "y.ts".into()]),
+            ("c".into(), vec!["z.ts".into()]),
+        ]);
+        assert_eq!(
+            found[0].1,
+            [Overlap {
+                task_id: "b".into(),
+                files: vec!["y.ts".into()]
+            }]
+        );
+        assert_eq!(found[1].1[0].task_id, "a");
+        assert!(found[2].1.is_empty());
     }
 
     #[test]

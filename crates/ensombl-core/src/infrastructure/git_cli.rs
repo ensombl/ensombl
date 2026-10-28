@@ -255,6 +255,42 @@ impl TaskGit for GitCli {
         git(repo, &["branch", "-D", branch])?;
         Ok(())
     }
+
+    fn uncommitted(&self, worktree: &Path) -> Result<Vec<String>> {
+        let out = git(
+            worktree,
+            &["status", "--porcelain", "--untracked-files=all"],
+        )?;
+        Ok(out
+            .lines()
+            .filter(|l| l.len() > 3)
+            // "XY path" or "XY old -> new" for renames.
+            .map(|l| l[3..].rsplit(" -> ").next().unwrap_or(&l[3..]).to_string())
+            .collect())
+    }
+
+    fn behind(&self, repo: &Path, base: &str, branch: &str) -> Result<usize> {
+        let out = git(repo, &["rev-list", "--count", &format!("{branch}..{base}")])?;
+        out.trim()
+            .parse()
+            .map_err(|_| Error::Git(format!("can't compare {branch} with {base}")))
+    }
+
+    fn update_from_base(&self, worktree: &Path, base: &str) -> Result<()> {
+        let branch = git(worktree, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+        let conflicts = self.conflicts(worktree, branch.trim(), base)?;
+        if !conflicts.is_empty() {
+            return Err(Error::Git(format!(
+                "updating from {base} would conflict in {}",
+                conflicts.join(", ")
+            )));
+        }
+        git(
+            worktree,
+            &with_identity(worktree, &["merge", "--no-edit", "-q", base]),
+        )?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -415,6 +451,40 @@ mod tests {
         std::fs::write(repo.path().join("a.txt"), "wip").unwrap();
         let err = GitCli.merge(repo.path(), "main", "task", "m").unwrap_err();
         assert!(err.to_string().contains("uncommitted changes"));
+    }
+
+    #[test]
+    fn tracks_uncommitted_work_and_catches_up_with_the_base() {
+        let repo = init_repo();
+        let wt_parent = tempfile::tempdir().unwrap();
+        let wt = wt_parent.path().join("task");
+        GitCli
+            .add(repo.path(), &wt, "task", Some("main"), true)
+            .unwrap();
+        std::fs::write(wt.join("new.txt"), "n").unwrap();
+        assert_eq!(GitCli.uncommitted(&wt).unwrap(), ["new.txt"]);
+        GitCli.commit_all(&wt, "task work").unwrap();
+        assert!(GitCli.uncommitted(&wt).unwrap().is_empty());
+
+        commit(repo.path(), "base.txt", "moved on");
+        assert_eq!(GitCli.behind(repo.path(), "main", "task").unwrap(), 1);
+        GitCli.update_from_base(&wt, "main").unwrap();
+        assert_eq!(GitCli.behind(repo.path(), "main", "task").unwrap(), 0);
+        assert!(wt.join("base.txt").exists());
+    }
+
+    #[test]
+    fn refuses_to_update_into_conflicts() {
+        let repo = init_repo();
+        let wt_parent = tempfile::tempdir().unwrap();
+        let wt = wt_parent.path().join("task");
+        GitCli
+            .add(repo.path(), &wt, "task", Some("main"), true)
+            .unwrap();
+        commit(&wt, "a.txt", "theirs");
+        commit(repo.path(), "a.txt", "ours");
+        assert!(GitCli.update_from_base(&wt, "main").is_err());
+        assert!(GitCli.uncommitted(&wt).unwrap().is_empty());
     }
 
     #[test]

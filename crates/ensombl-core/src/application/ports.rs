@@ -61,6 +61,13 @@ pub trait TaskGit: Send + Sync {
     /// and when `base` is checked out with uncommitted changes.
     fn merge(&self, repo: &Path, base: &str, branch: &str, message: &str) -> Result<()>;
     fn delete_branch(&self, repo: &Path, branch: &str) -> Result<()>;
+    /// Paths changed in `worktree` but not committed yet.
+    fn uncommitted(&self, worktree: &Path) -> Result<Vec<String>>;
+    /// How many commits `base` has that `branch` doesn't.
+    fn behind(&self, repo: &Path, base: &str, branch: &str) -> Result<usize>;
+    /// Merges `base` into the branch checked out in `worktree`. Refuses (and
+    /// leaves it untouched) on conflicts.
+    fn update_from_base(&self, worktree: &Path, base: &str) -> Result<()>;
 }
 
 /// Finds a worktree's folder by id: an open tab, or a task's own worktree.
