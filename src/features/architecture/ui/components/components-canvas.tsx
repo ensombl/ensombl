@@ -176,7 +176,11 @@ function Canvas({ system, onShowCode }: CanvasProps) {
           zoomOnPinch
           zoomOnDoubleClick={false}
           multiSelectionKeyCode="Shift"
-          onSelectionChange={({ nodes: picked }) => setMulti(picked.length > 1 ? picked.map((n) => n.id) : [])}
+          onSelectionChange={({ nodes: picked }) => {
+            const ids = picked.length > 1 ? picked.map((n) => n.id) : []
+            // Keep the same array when nothing changed, or this feeds back into the nodes forever.
+            setMulti((prev) => (prev.length === ids.length && prev.every((id, i) => id === ids[i]) ? prev : ids))
+          }}
           onNodeClick={(event, node) => {
             if (event.shiftKey || node.type === "lane") return
             if (node.type === "feature") ui.select(null)
@@ -187,7 +191,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
           }}
           onPaneClick={() => {
             ui.select(null)
-            setMulti([])
+            setMulti((prev) => (prev.length ? [] : prev))
           }}
           proOptions={{ hideAttribution: true }}
           onlyRenderVisibleElements

@@ -20,6 +20,9 @@ export interface SystemUiState {
 
 const initial = (): SystemUiState => ({ tab: "components", focus: null, selected: null, filters: defaultFilters(), entry: null })
 
+// One shared fallback so untouched tabs see a stable object (and stable memo deps).
+const DEFAULT = initial()
+
 interface Store {
   byWorktree: Record<string, SystemUiState>
   patch: (worktreeId: string, value: Partial<SystemUiState>) => void
@@ -32,7 +35,7 @@ const useStore = create<Store>((set) => ({
 
 export function useSystemUi() {
   const { id } = useWorkspace()
-  const state = useStore((s) => s.byWorktree[id]) ?? initial()
+  const state = useStore((s) => s.byWorktree[id]) ?? DEFAULT
   const patch = useStore((s) => s.patch)
   const set = (value: Partial<SystemUiState>) => patch(id, value)
   return {
