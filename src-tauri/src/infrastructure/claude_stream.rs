@@ -682,4 +682,65 @@ echo '{"type":"result","is_error":false}'
         assert!(matches!(got[2], ChatEvent::TurnComplete { .. }));
         assert_eq!(got[3], ChatEvent::Exited { code: Some(0) });
     }
+
+    /// Against the real CLI: `CRM_CLAUDE=$(which claude) cargo test claude_smoke -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn claude_smoke() {
+        use std::sync::mpsc;
+        let program = std::env::var("CRM_CLAUDE").expect("CRM_CLAUDE");
+        let dir = tempfile::tempdir().unwrap();
+        let env = std::env::vars()
+            .filter(|(k, _)| k != "CLAUDECODE" && !k.starts_with("CLAUDE_CODE_"))
+            .collect();
+        let (tx, rx) = mpsc::channel();
+        let tx = Mutex::new(tx);
+        let conn = ClaudeCode
+            .start(
+                AgentLaunch {
+                    program: program.into(),
+                    args: vec![],
+                    cwd: dir.path().into(),
+                    env,
+                    resume: None,
+                    model: Some("haiku".into()),
+                    permission_mode: PermissionMode::Default,
+                },
+                Box::new(move |e| {
+                    let _ = tx.lock().unwrap().send(e);
+                }),
+            )
+            .unwrap();
+        conn.send("Create notes.txt containing 'hi' with the Write tool, then reply 'done'.")
+            .unwrap();
+        for event in rx.iter() {
+            println!("{}", serde_json::to_string(&event).unwrap());
+            match event {
+                ChatEvent::Permission { request_id, .. } => conn
+                    .respond(
+                        &request_id,
+                        &PermissionDecision {
+                            allow: true,
+                            remember: false,
+                            updated_input: None,
+                            message: None,
+                        },
+                    )
+                    .unwrap(),
+                ChatEvent::TurnComplete { is_error, .. } => {
+                    assert!(!is_error);
+                    break;
+                }
+                ChatEvent::Exited { .. } => panic!("exited early"),
+                _ => {}
+            }
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("notes.txt"))
+                .unwrap()
+                .trim(),
+            "hi"
+        );
+        conn.kill();
+    }
 }
