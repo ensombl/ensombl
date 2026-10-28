@@ -2,32 +2,20 @@ import { useEffect, useRef, useState } from "react"
 import { basicSetup } from "codemirror"
 import { EditorState, type Text } from "@codemirror/state"
 import { EditorView, keymap } from "@codemirror/view"
-import { oneDark } from "@codemirror/theme-one-dark"
-import { Code2, ExternalLink, Loader2, MessageSquare, Save, X } from "lucide-react"
+import { Code2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Pane, PaneEmpty } from "@/shared/ui/pane"
+import { PaneEmpty } from "@/shared/ui/pane"
 import { useWorkspace } from "@/shared/workspace/workspace-context"
 
-import { useOpenInEditor, useSaveSource } from "@/features/peek/commands/peek-commands"
+import { useSaveSource } from "@/features/peek/commands/peek-commands"
 import { useComments, useSource } from "@/features/peek/queries/peek-queries"
 import { CodeView } from "@/features/peek/ui/code-view"
-import { EditorSettings } from "@/features/peek/ui/peek-panel"
 
 import { draftKey, useDraftsStore } from "../../model/drafts-store"
 import { languageFor } from "../../model/editor-languages"
-
-const theme = EditorView.theme(
-  {
-    "&": { height: "100%", fontSize: "12.5px", backgroundColor: "#0d1117" },
-    ".cm-gutters": { backgroundColor: "#0d1117", border: "none" },
-    ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", lineHeight: "1.6" },
-    "&.cm-focused": { outline: "none" },
-  },
-  { dark: true },
-)
+import { githubDark } from "./github-dark"
 
 interface EditorProps {
   worktreeId: string
@@ -37,7 +25,7 @@ interface EditorProps {
   line: number
   onDirty: (dirty: boolean) => void
   onConflict: (conflict: boolean) => void
-  /** Saves are triggered from the header and ⌘S. */
+  /** Saves are triggered by ⌘S and the conflict bar. */
   saveRef: React.RefObject<((overwrite?: boolean) => void) | null>
   reloadRef: React.RefObject<(() => void) | null>
 }
@@ -99,8 +87,7 @@ function Editor({ worktreeId, path, content, line, onDirty, onConflict, saveRef,
       extensions: [
         basicSetup,
         languageFor(path),
-        oneDark,
-        theme,
+        githubDark,
         keymap.of([{ key: "Mod-s", preventDefault: true, run: () => (saveRef.current?.(), true) }]),
         EditorView.updateListener.of((u) => {
           if (!u.docChanged) return
@@ -141,104 +128,56 @@ function Editor({ worktreeId, path, content, line, onDirty, onConflict, saveRef,
   return <div ref={host} className="h-full overflow-hidden" />
 }
 
-/** A worktree file, editable in place; ⌘S saves. Comments live in review mode. */
-export function CodeEditor({ path, line, onClose }: { path: string; line: number; onClose: () => void }) {
+/** A worktree file, editable in place; ⌘S saves. `review` shows it read-only with line comments. */
+export function CodeEditor({ path, line, review }: { path: string; line: number; review: boolean }) {
   const worktree = useWorkspace()
   const source = useSource(worktree.id, path)
   const comments = useComments(worktree.id)
-  const openInEditor = useOpenInEditor()
   const key = draftKey(worktree.id, path)
-  const dirty = useDraftsStore((s) => !!s.dirty[key])
   const setDirty = useDraftsStore((s) => s.setDirty)
   const [conflict, setConflict] = useState(false)
-  const [review, setReview] = useState(false)
   const saveRef = useRef<((overwrite?: boolean) => void) | null>(null)
   const reloadRef = useRef<(() => void) | null>(null)
-  const title = path.slice(path.lastIndexOf("/") + 1)
   const fileComments = (comments.data ?? []).filter((c) => c.comment.file === path)
 
+  if (!source.data) {
+    return (
+      <PaneEmpty
+        icon={source.isError ? <Code2 /> : <Loader2 className="animate-spin" />}
+        title={source.isError ? "Couldn't read file" : "Loading…"}
+        description={source.isError ? String(source.error) : path}
+      />
+    )
+  }
   return (
-    <Pane
-      title={dirty ? `${title} •` : title}
-      icon={<Code2 />}
-      actions={
-        <>
-          <span className="truncate font-mono text-xs text-muted-foreground">{path}</span>
-          <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" disabled={!dirty} onClick={() => saveRef.current?.()}>
-            <Save /> Save
+    <div className="flex h-full flex-col">
+      {conflict && (
+        <div className="flex shrink-0 items-center gap-2 border-b bg-amber-400/10 px-3 py-1.5 text-xs">
+          <span className="text-amber-200">This file changed on disk since you started editing.</span>
+          <Button size="sm" variant="outline" className="ml-auto h-6 text-xs" onClick={() => reloadRef.current?.()}>
+            Load theirs
           </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={review ? "secondary" : "ghost"}
-                size="icon"
-                className="size-7"
-                aria-label="Review comments"
-                onClick={() => setReview((r) => !r)}
-              >
-                <MessageSquare />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{review ? "Back to editing" : "Comment on lines"}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                aria-label="Open in editor"
-                onClick={() => openInEditor.mutate({ worktreeId: worktree.id, path, line })}
-              >
-                <ExternalLink />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Open in editor</TooltipContent>
-          </Tooltip>
-          <EditorSettings />
-          <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="Close file">
-            <X />
+          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => saveRef.current?.(true)}>
+            Keep mine
           </Button>
-        </>
-      }
-    >
-      {!source.data ? (
-        <PaneEmpty
-          icon={source.isError ? <Code2 /> : <Loader2 className="animate-spin" />}
-          title={source.isError ? "Couldn't read file" : "Loading…"}
-          description={source.isError ? String(source.error) : path}
-        />
-      ) : (
-        <div className="flex h-full flex-col">
-          {conflict && (
-            <div className="flex shrink-0 items-center gap-2 border-b bg-amber-400/10 px-3 py-1.5 text-xs">
-              <span className="text-amber-200">This file changed on disk since you started editing.</span>
-              <Button size="sm" variant="outline" className="ml-auto h-6 text-xs" onClick={() => reloadRef.current?.()}>
-                Load theirs
-              </Button>
-              <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => saveRef.current?.(true)}>
-                Keep mine
-              </Button>
-            </div>
-          )}
-          <div className="min-h-0 flex-1">
-            {/* Review mode shows the file on disk; the editor stays mounted so edits survive. */}
-            {review && <CodeView path={path} content={source.data.content} line={line} comments={fileComments} />}
-            <div className={review ? "hidden" : "h-full"}>
-              <Editor
-                worktreeId={worktree.id}
-                path={path}
-                content={source.data.content}
-                line={line}
-                onDirty={(d) => setDirty(key, d)}
-                onConflict={setConflict}
-                saveRef={saveRef}
-                reloadRef={reloadRef}
-              />
-            </div>
-          </div>
         </div>
       )}
-    </Pane>
+      <div className="min-h-0 flex-1">
+        {/* Review mode shows the file on disk; the editor stays mounted so edits survive. */}
+        {review && <CodeView path={path} content={source.data.content} line={line} comments={fileComments} />}
+        <div className={review ? "hidden" : "h-full"}>
+          <Editor
+            worktreeId={worktree.id}
+            path={path}
+            content={source.data.content}
+            line={line}
+            onDirty={(d) => setDirty(key, d)}
+            onConflict={setConflict}
+            saveRef={saveRef}
+            reloadRef={reloadRef}
+          />
+        </div>
+      </div>
+    </div>
   )
 }

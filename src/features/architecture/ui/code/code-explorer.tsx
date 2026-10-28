@@ -13,6 +13,7 @@ import { ancestorDirs, buildFileTree, searchFiles, type FileTreeNode } from "../
 import { useSystemUi } from "../../model/system-store"
 import { useFiles } from "../../queries/system-queries"
 import { CodeEditor } from "./code-editor"
+import { CodeTabs } from "./code-tabs"
 
 interface TreeProps {
   nodes: FileTreeNode[]
@@ -73,6 +74,7 @@ export function CodeExplorer() {
   const dirty = useDraftsStore((s) => s.dirty)
   const isDirty = useCallback((path: string) => !!dirty[draftKey(worktree.id, path)], [dirty, worktree.id])
   const [query, setQuery] = useState("")
+  const [review, setReview] = useState(false)
   const [open, setOpen] = useState<Set<string>>(() => new Set(selected ? ancestorDirs(selected) : []))
   const tree = useMemo(() => buildFileTree(files.data ?? []), [files.data])
   const matches = useMemo(() => searchFiles(files.data ?? [], query), [files.data, query])
@@ -126,12 +128,15 @@ export function CodeExplorer() {
         </div>
       </ResizablePanel>
       <ResizableHandle />
-      <ResizablePanel id="file-view" minSize="30" className="min-w-0">
-        {selected ? (
-          <CodeEditor key={selected} path={selected} line={line} onClose={() => ui.openFile(null)} />
-        ) : (
-          <PaneEmpty icon={<FileCode2 />} title="Pick a file" description={`${files.data?.length ?? 0} files in this worktree`} />
-        )}
+      <ResizablePanel id="file-view" minSize="30" className="flex min-w-0 flex-col">
+        {ui.state.openFiles.length > 0 && <CodeTabs review={review} onReview={setReview} />}
+        <div className="min-h-0 flex-1">
+          {selected ? (
+            <CodeEditor key={selected} path={selected} line={line} review={review} />
+          ) : (
+            <PaneEmpty icon={<FileCode2 />} title="Pick a file" description={`${files.data?.length ?? 0} files in this worktree`} />
+          )}
+        </div>
       </ResizablePanel>
     </ResizablePanelGroup>
   )
