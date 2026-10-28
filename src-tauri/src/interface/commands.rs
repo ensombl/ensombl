@@ -7,6 +7,7 @@ use tauri::State;
 use tauri::ipc::{Channel, InvokeResponseBody};
 
 use crate::application::commands::indexing::{DropIndex, IndexSummary, IndexWorktree};
+use crate::application::commands::patterns::SetPatternDecision;
 use crate::application::commands::terminals::{
     AttachTerminal, CloseTerminal, ResizeTerminal, StartTerminal, WithSink, WriteTerminal,
 };
@@ -17,6 +18,7 @@ use crate::application::commands::workspaces::{
 use crate::application::cqrs::{CommandHandler, QueryHandler};
 use crate::application::queries::get_app_info::{AppInfo, GetAppInfo};
 use crate::application::queries::model::GetModel;
+use crate::application::queries::patterns::{GetPatterns, PatternView};
 use crate::application::queries::terminals::{AgentAvailability, ListAgents, ListTerminals};
 use crate::application::queries::workspaces::{
     GetSession, ListBranches, ListWorktrees, SessionView, WorktreeListing,
@@ -89,7 +91,23 @@ pub fn list_terminals(
     handlers.terminal_queries.handle(input)
 }
 
+#[tauri::command]
+pub async fn get_patterns(
+    handlers: State<'_, Handlers>,
+    input: GetPatterns,
+) -> Result<Vec<PatternView>> {
+    blocking(&handlers.pattern_queries, move |h| h.handle(input)).await
+}
+
 // Commands
+
+#[tauri::command]
+pub fn set_pattern_decision(
+    handlers: State<'_, Handlers>,
+    input: SetPatternDecision,
+) -> Result<()> {
+    handlers.pattern_commands.handle(input)
+}
 
 #[tauri::command]
 pub async fn start_terminal(

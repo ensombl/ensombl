@@ -1,5 +1,6 @@
 import type { ArchModel } from "@/shared/bindings/ArchModel"
 import type { EdgeKind } from "@/shared/bindings/EdgeKind"
+import type { PatternInstance } from "@/shared/bindings/PatternInstance"
 import type { Member } from "@/shared/bindings/Member"
 import type { SymbolNode } from "@/shared/bindings/SymbolNode"
 import type { PromptTag } from "@/shared/workspace/prompt-tags"
@@ -55,8 +56,26 @@ function describeSymbol(model: ArchModel, symbol: SymbolNode): string {
   return lines.join("\n")
 }
 
-function describeTag(model: ArchModel | null, tag: PromptTag): string | null {
+function describePattern(model: ArchModel | null, pattern: PatternInstance): string {
+  const byId = new Map(model?.symbols.map((s) => [s.id, s]))
+  const lines = [
+    `### pattern ${pattern.name} (${pattern.kind}, confidence ${pattern.confidence.toFixed(2)})`,
+    `evidence: ${pattern.evidence.join("; ")}`,
+    "roles:",
+  ]
+  for (const p of pattern.participants) {
+    const s = byId.get(p.symbolId)
+    lines.push(s ? `  - ${p.role}: ${s.name}  @${s.file}:${s.range.startLine}` : `  - ${p.role}: ${p.symbolId}`)
+  }
+  return lines.join("\n")
+}
+
+function describeTag(model: ArchModel | null, tag: PromptTag, patterns: PatternInstance[]): string | null {
   if (tag.type === "file") return `### file\n@${tag.path}`
+  if (tag.type === "pattern") {
+    const pattern = patterns.find((p) => p.id === tag.patternId)
+    return pattern ? describePattern(model, pattern) : null
+  }
   const symbol = model?.symbols.find((s) => s.id === tag.symbolId)
   if (!model || !symbol) return null
   if (tag.type === "symbol") return describeSymbol(model, symbol)
@@ -66,8 +85,13 @@ function describeTag(model: ArchModel | null, tag: PromptTag): string | null {
 }
 
 /** The full text sent to the agent: the user's prompt followed by tag context. */
-export function buildPrompt(text: string, tags: PromptTag[], model: ArchModel | null): string {
-  const blocks = tags.map((t) => describeTag(model, t)).filter((b): b is string => b !== null)
+export function buildPrompt(
+  text: string,
+  tags: PromptTag[],
+  model: ArchModel | null,
+  patterns: PatternInstance[] = [],
+): string {
+  const blocks = tags.map((t) => describeTag(model, t, patterns)).filter((b): b is string => b !== null)
   if (blocks.length === 0) return text.trim()
   return `${text.trim()}\n\n<architecture-context source="CRM">\n${blocks.join("\n\n")}\n</architecture-context>`
 }

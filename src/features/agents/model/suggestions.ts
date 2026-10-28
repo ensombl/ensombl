@@ -1,4 +1,5 @@
 import type { ArchModel } from "@/shared/bindings/ArchModel"
+import type { PatternInstance } from "@/shared/bindings/PatternInstance"
 import type { SymbolKind } from "@/shared/bindings/SymbolKind"
 import type { PromptTag } from "@/shared/workspace/prompt-tags"
 
@@ -6,13 +7,17 @@ export interface Suggestion {
   tag: PromptTag
   /** Secondary text, e.g. the file. */
   detail: string
-  kind: SymbolKind | "member" | "file"
+  kind: SymbolKind | "member" | "file" | "pattern"
 }
 
 /** Everything taggable in a model: symbols, their members, and files. */
-export function taggables(model: ArchModel | null): Suggestion[] {
+export function taggables(model: ArchModel | null, patterns: PatternInstance[] = []): Suggestion[] {
   if (!model) return []
-  const out: Suggestion[] = []
+  const out: Suggestion[] = patterns.map((p) => ({
+    tag: { type: "pattern", patternId: p.id, label: `pattern:${p.name.replace(": ", "/")}` },
+    detail: `${p.participants.length} participants`,
+    kind: "pattern",
+  }))
   const files = new Set<string>()
   for (const s of model.symbols) {
     out.push({ tag: { type: "symbol", symbolId: s.id, label: s.name }, detail: s.file, kind: s.kind })
@@ -51,7 +56,7 @@ export function matchSuggestions(all: Suggestion[], query: string, limit = 8): S
 
 /** The `@query` being typed right before the caret, if any. */
 export function mentionAt(text: string, caret: number): { start: number; query: string } | null {
-  const match = /(^|\s)@([\w.$/-]*)$/.exec(text.slice(0, caret))
+  const match = /(^|\s)@([\w.$/:-]*)$/.exec(text.slice(0, caret))
   if (!match) return null
   return { start: caret - match[2].length - 1, query: match[2] }
 }

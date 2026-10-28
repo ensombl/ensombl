@@ -70,6 +70,32 @@ describe("buildPrompt", () => {
   })
 })
 
+describe("pattern tags", () => {
+  it("lists roles with locations", () => {
+    const out = buildPrompt(
+      "follow @pattern",
+      [{ type: "pattern", patternId: "strategy:x", label: "Strategy/Repo" }],
+      model,
+      [
+        {
+          id: "strategy:x",
+          kind: "strategy",
+          name: "Strategy: Repo",
+          confidence: 0.9,
+          evidence: ["2 implementations"],
+          participants: [
+            { symbolId: repo.id, role: "Strategy" },
+            { symbolId: service.id, role: "Context" },
+          ],
+        },
+      ],
+    )
+    expect(out).toContain("### pattern Strategy: Repo (strategy, confidence 0.90)")
+    expect(out).toContain("  - Strategy: Repo  @src/repo.ts:3")
+    expect(out).toContain("  - Context: UserService  @src/user.ts:3")
+  })
+})
+
 describe("bracketedPaste", () => {
   it("wraps text in paste markers", () => {
     expect(bracketedPaste("a\nb")).toBe("\x1b[200~a\nb\x1b[201~")

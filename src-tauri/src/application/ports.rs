@@ -151,3 +151,19 @@ pub trait TerminalSink: Send + Sync {
     fn output(&self, bytes: &[u8]);
     fn exited(&self, code: Option<i32>);
 }
+
+// Patterns
+
+/// The user's confirm/dismiss verdicts on detected patterns, per project.
+pub trait PatternDecisions: Send + Sync {
+    fn load(
+        &self,
+        project: &str,
+    ) -> std::collections::HashMap<String, crate::domain::patterns::PatternDecision>;
+    fn set(
+        &self,
+        project: &str,
+        pattern_id: &str,
+        decision: Option<crate::domain::patterns::PatternDecision>,
+    ) -> Result<()>;
+}
