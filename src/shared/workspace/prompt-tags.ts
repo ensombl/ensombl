@@ -8,6 +8,8 @@ export type PromptTag =
   | { type: "member"; symbolId: string; member: string; label: string }
   | { type: "file"; path: string; label: string }
   | { type: "pattern"; patternId: string; label: string }
+  | { type: "component"; componentId: string; label: string }
+  | { type: "flow"; entryId: string; label: string }
 
 export function tagKey(tag: PromptTag): string {
   switch (tag.type) {
@@ -17,6 +19,10 @@ export function tagKey(tag: PromptTag): string {
       return `member:${tag.symbolId}.${tag.member}`
     case "pattern":
       return `pattern:${tag.patternId}`
+    case "component":
+      return `component:${tag.componentId}`
+    case "flow":
+      return `flow:${tag.entryId}`
     default:
       return `symbol:${tag.symbolId}`
   }

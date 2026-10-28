@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
-import { ArrowUp, AtSign, FileCode2, Shapes, Square, X } from "lucide-react"
+import { ArrowUp, AtSign, FileCode2, Route, Shapes, Square, Waypoints, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -7,8 +7,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { KindBadge } from "@/features/architecture/ui/kind-badge"
 import { cn } from "@/lib/utils"
 import type { ArchModel } from "@/shared/bindings/ArchModel"
+import type { FlowStep } from "@/shared/bindings/FlowStep"
 import type { PatternInstance } from "@/shared/bindings/PatternInstance"
+import { query } from "@/shared/ipc/client"
 import { tagKey, usePromptTags } from "@/shared/workspace/prompt-tags"
+import { useWorkspace } from "@/shared/workspace/workspace-context"
+
+import { useSystem } from "@/features/architecture/queries/system-queries"
 
 import { buildPrompt } from "../model/context"
 import { matchSuggestions, mentionAt, taggables, type Suggestion } from "../model/suggestions"
@@ -31,12 +36,17 @@ function SuggestionIcon({ s }: { s: Suggestion }) {
   if (s.kind === "file") return <FileCode2 className="size-4 text-muted-foreground" />
   if (s.kind === "member") return <AtSign className="size-4 text-muted-foreground" />
   if (s.kind === "pattern") return <Shapes className="size-4 text-violet-300" />
+  if (s.kind === "component") return <Waypoints className="size-4 text-emerald-300" />
+  if (s.kind === "flow") return <Route className="size-4 text-sky-300" />
   return <KindBadge kind={s.kind} className="size-4 text-[9px]" />
 }
 
 /** Prompt box for the active agent with `@` tagging of classes, members and files. */
 export function Composer({ model, patterns, onSend, placeholder, disabled, busy, onStop, controls }: ComposerProps) {
   const { tags, add, remove, clear, draft, takeDraft } = usePromptTags()
+  const worktree = useWorkspace()
+  const { data: systemView } = useSystem(worktree.id, !!model)
+  const system = systemView?.model ?? null
   const [text, setText] = useState("")
 
   // Pick up text queued elsewhere (e.g. "Send review to agent").
@@ -54,7 +64,7 @@ export function Composer({ model, patterns, onSend, placeholder, disabled, busy,
   const [highlight, setHighlight] = useState(0)
   const input = useRef<HTMLTextAreaElement>(null)
 
-  const all = useMemo(() => taggables(model, patterns), [model, patterns])
+  const all = useMemo(() => taggables(model, patterns, system), [model, patterns, system])
   const mention = mentionAt(text, caret)
   const suggestions = useMemo(() => (mention ? matchSuggestions(all, mention.query) : []), [all, mention?.query]) // eslint-disable-line react-hooks/exhaustive-deps
   const open = mention !== null && suggestions.length > 0
@@ -78,7 +88,13 @@ export function Composer({ model, patterns, onSend, placeholder, disabled, busy,
   const send = async () => {
     if (!canSend) return
     try {
-      await onSend(buildPrompt(text, tags, model, patterns))
+      // Tagged flows are traced now so the agent gets the actual call chain.
+      const flows: Record<string, FlowStep[]> = {}
+      for (const t of tags) {
+        if (t.type !== "flow") continue
+        flows[t.entryId] = await query<FlowStep[]>("get_flow", { input: { worktreeId: worktree.id, entryId: t.entryId, depth: 6 } })
+      }
+      await onSend(buildPrompt(text, tags, model, { patterns, system, flows }))
     } catch {
       return // keep the draft so nothing is lost
     }

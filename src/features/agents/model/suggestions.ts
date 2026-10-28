@@ -1,23 +1,42 @@
 import type { ArchModel } from "@/shared/bindings/ArchModel"
 import type { PatternInstance } from "@/shared/bindings/PatternInstance"
 import type { SymbolKind } from "@/shared/bindings/SymbolKind"
+import type { SystemModel } from "@/shared/bindings/SystemModel"
 import type { PromptTag } from "@/shared/workspace/prompt-tags"
 
 export interface Suggestion {
   tag: PromptTag
   /** Secondary text, e.g. the file. */
   detail: string
-  kind: SymbolKind | "member" | "file" | "pattern"
+  kind: SymbolKind | "member" | "file" | "pattern" | "component" | "flow"
 }
 
-/** Everything taggable in a model: symbols, their members, and files. */
-export function taggables(model: ArchModel | null, patterns: PatternInstance[] = []): Suggestion[] {
+/** Everything taggable: components, flows, patterns, symbols, their members, and files. */
+export function taggables(
+  model: ArchModel | null,
+  patterns: PatternInstance[] = [],
+  system: SystemModel | null = null,
+): Suggestion[] {
   if (!model) return []
-  const out: Suggestion[] = patterns.map((p) => ({
-    tag: { type: "pattern", patternId: p.id, label: `pattern:${p.name.replace(": ", "/")}` },
-    detail: `${p.participants.length} participants`,
-    kind: "pattern",
-  }))
+  const out: Suggestion[] = []
+  for (const n of system?.nodes ?? []) {
+    if (n.kind !== "component" || n.role === "other") continue
+    out.push({
+      tag: { type: "component", componentId: n.id, label: `component:${n.name}` },
+      detail: n.description || `${n.feature} · ${n.role}`,
+      kind: "component",
+    })
+  }
+  for (const e of system?.entryPoints ?? []) {
+    out.push({ tag: { type: "flow", entryId: e.id, label: `flow:${e.label}` }, detail: e.kind, kind: "flow" })
+  }
+  for (const p of patterns) {
+    out.push({
+      tag: { type: "pattern", patternId: p.id, label: `pattern:${p.name.replace(": ", "/")}` },
+      detail: `${p.participants.length} participants`,
+      kind: "pattern",
+    })
+  }
   const files = new Set<string>()
   for (const s of model.symbols) {
     out.push({ tag: { type: "symbol", symbolId: s.id, label: s.name }, detail: s.file, kind: s.kind })
