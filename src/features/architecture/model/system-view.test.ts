@@ -84,6 +84,18 @@ describe("buildComponentsView", () => {
     expect(view.nodes.find((n) => n.id === "feature:api/claims")).toMatchObject({ count: 62 })
   })
 
+  it("boxes nodes by package when several packages are on screen, externals outside", () => {
+    const web = node("Page", "pages", { package: "web", role: "page", layer: "interface" })
+    const view = buildComponentsView(model([...small.nodes, web], [...small.interactions, link("Page", "ClaimsController", "http")]), null, defaultFilters())
+    expect(view.grouped).toBe(true)
+    const byId = Object.fromEntries(view.nodes.map((n) => [n.id, n]))
+    expect(byId["pkg:web"]).toMatchObject({ type: "package", count: 1 })
+    expect(byId.Page).toMatchObject({ parent: "pkg:web" })
+    expect(byId.ClaimsService).toMatchObject({ parent: "pkg:api" })
+    expect(byId["ext:Database"]).not.toHaveProperty("parent")
+    expect(buildComponentsView(small, null, defaultFilters()).grouped).toBe(false)
+  })
+
   it("labels edges compactly", () => {
     expect(membersLabel(["a", "b", "c", "d"])).toBe("a, b +2")
     expect(membersLabel([])).toBe("")

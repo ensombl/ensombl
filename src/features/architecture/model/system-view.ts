@@ -35,8 +35,16 @@ export const OVERVIEW_THRESHOLD = 60
 
 export type ComponentsViewNode =
   | {
+      /** A box around everything in one workspace package (web, api, …). */
+      type: "package"
+      id: string
+      label: string
+      count: number
+    }
+  | {
       type: "feature"
       id: string
+      parent?: string
       label: string
       pkg: string
       count: number
@@ -46,6 +54,7 @@ export type ComponentsViewNode =
   | {
       type: "component"
       id: string
+      parent?: string
       node: SystemNode
       entryCount: number
       /** A neighbor shown for context, outside the focused feature. */
@@ -67,6 +76,30 @@ export interface ComponentsView {
   edges: ComponentsViewEdge[]
   /** Overview of features rather than components. */
   overview: boolean
+  /** Nodes sit inside package boxes (more than one package on screen). */
+  grouped: boolean
+}
+
+export const packageId = (pkg: string) => `pkg:${pkg}`
+
+/** Wraps nodes of each package in a box when more than one package is on screen; externals stay outside. */
+function groupByPackage(nodes: ComponentsViewNode[]): { nodes: ComponentsViewNode[]; grouped: boolean } {
+  const pkgOf = (n: ComponentsViewNode) =>
+    n.type === "feature" ? n.pkg : n.type === "component" && n.node.kind === "component" ? n.node.package : null
+  const counts = new Map<string, number>()
+  for (const n of nodes) {
+    const pkg = pkgOf(n)
+    if (pkg !== null) counts.set(pkg, (counts.get(pkg) ?? 0) + 1)
+  }
+  if (counts.size < 2) return { nodes, grouped: false }
+  const boxes: ComponentsViewNode[] = [...counts]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([pkg, count]) => ({ type: "package", id: packageId(pkg), label: pkg || "root", count }))
+  const inner = nodes.map((n) => {
+    const pkg = pkgOf(n)
+    return pkg === null || n.type === "package" ? n : { ...n, parent: packageId(pkg) }
+  })
+  return { nodes: [...boxes, ...inner], grouped: true }
 }
 
 export const featureId = (n: Pick<SystemNode, "package" | "feature">) => `feature:${n.package}/${n.feature}`
@@ -139,7 +172,7 @@ function overview(model: SystemModel, nodes: SystemNode[], kinds: Set<Interactio
     }
     add(groupOf.get(i.from), groupOf.get(i.to), i.members, i.count)
   }
-  return { nodes: out, edges: [...edges.values()], overview: true }
+  return { ...groupByPackage(out), edges: [...edges.values()], overview: true }
 }
 
 /**
@@ -183,7 +216,7 @@ export function buildComponentsView(model: SystemModel, focus: string | null, fi
   const edges: ComponentsViewEdge[] = interactions
     .filter((i) => included.has(i.from) && included.has(i.to) && (core.has(i.from) || core.has(i.to) || visible.get(i.from)?.kind === "channel" || visible.get(i.to)?.kind === "channel"))
     .map((i) => ({ id: i.id, source: i.from, target: i.to, kind: i.kind, members: i.members, count: i.count, interaction: i }))
-  return { nodes: out, edges, overview: false }
+  return { ...groupByPackage(out), edges, overview: false }
 }
 
 /** Label for an edge: the first members, then how many more. */

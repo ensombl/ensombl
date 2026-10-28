@@ -1,4 +1,4 @@
-import type { ElkNode } from "elkjs/lib/elk-api"
+import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api"
 
 import type { Layer } from "@/shared/bindings/Layer"
 
@@ -29,7 +29,7 @@ export const LAYER_LABEL: Record<Layer, string> = {
 }
 
 const lane = (n: ComponentsViewNode): number => {
-  if (n.type === "feature") return 0
+  if (n.type === "feature" || n.type === "package") return 0
   if (n.node.kind === "channel") return LANE_ORDER.channel
   return LANE_ORDER[n.node.layer]
 }
@@ -38,6 +38,7 @@ const MAX_WIDTH = 360
 
 /** Wide enough for the name (icon, padding and badges included), so labels aren't cut off. */
 export function sizeOf(n: ComponentsViewNode): { width: number; height: number } {
+  if (n.type === "package") return { width: 0, height: 0 }
   if (n.type === "feature") {
     const width = Math.min(Math.max(SYSTEM_SIZES.feature.width, n.label.length * 8.6 + 64), MAX_WIDTH)
     return { width: Math.ceil(width), height: SYSTEM_SIZES.feature.height }
@@ -47,33 +48,91 @@ export function sizeOf(n: ComponentsViewNode): { width: number; height: number }
   return { width: Math.ceil(width), height: SYSTEM_SIZES.component.height }
 }
 
-/** Flat layered graph, flowing right: callers on the left, what they depend on to the right. */
+const BASE_OPTIONS: Record<string, string> = {
+  "elk.algorithm": "layered",
+  "elk.direction": "RIGHT",
+  "elk.edgeRouting": "ORTHOGONAL",
+  "elk.spacing.nodeNode": "22",
+  "elk.layered.spacing.nodeNodeBetweenLayers": "90",
+  "elk.spacing.edgeNode": "16",
+  "elk.layered.spacing.edgeEdgeBetweenLayers": "10",
+  "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+  "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+  // Many callers of one component share a trunk instead of fanning in.
+  "elk.layered.mergeEdges": "true",
+}
+
+/**
+ * Layered graph flowing right: callers on the left, what they depend on to
+ * the right. Ungrouped views are split into layer lanes; grouped ones nest
+ * each package in a box and route edges across boxes.
+ */
 export function toSystemElk(view: ComponentsView): ElkNode {
+  const leaf = (n: ComponentsViewNode): ElkNode => ({
+    id: n.id,
+    ...sizeOf(n),
+    layoutOptions: view.grouped ? undefined : { "elk.partitioning.partition": String(lane(n)) },
+  })
+  const edges = view.edges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] }))
+  if (!view.grouped) {
+    return {
+      id: "root",
+      layoutOptions: { ...BASE_OPTIONS, "elk.partitioning.activate": "true", "elk.separateConnectedComponents": "false" },
+      children: view.nodes.map(leaf),
+      edges,
+    }
+  }
+  // Each box is laid out on its own (ELK's fast default). Laying out the whole
+  // hierarchy at once is far slower on big maps. Boxes are placed from summary
+  // edges between them; edges across boxes are drawn by the canvas.
+  const parentOf = new Map<string, string>()
+  const childrenOf = new Map<string, ComponentsViewNode[]>()
+  for (const n of view.nodes) {
+    if (n.type === "package" || !n.parent) continue
+    parentOf.set(n.id, n.parent)
+    childrenOf.set(n.parent, [...(childrenOf.get(n.parent) ?? []), n])
+  }
+  const inside = new Map<string, ElkExtendedEdge[]>()
+  const between = new Map<string, ElkExtendedEdge>()
+  for (const e of view.edges) {
+    const from = parentOf.get(e.source)
+    const to = parentOf.get(e.target)
+    if (from && from === to) {
+      inside.set(from, [...(inside.get(from) ?? []), { id: e.id, sources: [e.source], targets: [e.target] }])
+      continue
+    }
+    const a = from ?? e.source
+    const b = to ?? e.target
+    const id = `${SUMMARY_EDGE}${a}->${b}`
+    if (a !== b && !between.has(id)) between.set(id, { id, sources: [a], targets: [b] })
+  }
   return {
     id: "root",
-    layoutOptions: {
-      "elk.algorithm": "layered",
-      "elk.direction": "RIGHT",
-      "elk.edgeRouting": "ORTHOGONAL",
-      "elk.partitioning.activate": "true",
-      "elk.separateConnectedComponents": "false",
-      "elk.spacing.nodeNode": "22",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "90",
-      "elk.spacing.edgeNode": "16",
-      "elk.layered.spacing.edgeEdgeBetweenLayers": "10",
-      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
-      // Many callers of one component share a trunk instead of fanning in.
-      "elk.layered.mergeEdges": "true",
-    },
-    children: view.nodes.map((n) => ({
-      id: n.id,
-      ...sizeOf(n),
-      layoutOptions: { "elk.partitioning.partition": String(lane(n)) },
-    })),
-    edges: view.edges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
+    layoutOptions: { ...BASE_OPTIONS, "elk.spacing.nodeNode": "48", "elk.layered.spacing.nodeNodeBetweenLayers": "120" },
+    children: view.nodes
+      .filter((n) => n.type === "package" || !n.parent)
+      .map((n) =>
+        n.type === "package"
+          ? {
+              id: n.id,
+              layoutOptions: {
+                ...BASE_OPTIONS,
+                "elk.padding": `[top=${PACKAGE_HEADER + 16},left=20,bottom=20,right=20]`,
+              },
+              children: (childrenOf.get(n.id) ?? []).map(leaf),
+              edges: inside.get(n.id) ?? [],
+            }
+          : leaf(n),
+      ),
+    edges: [...between.values()],
   }
 }
+
+/** Prefix of layout-only edges between boxes; never drawn. */
+export const SUMMARY_EDGE = "summary:"
+
+/** Room for the package name at the top of its box. */
+export const PACKAGE_HEADER = 28
 
 export { flattenLayout, type Layout }
 
@@ -87,7 +146,7 @@ export interface Lane {
 
 /** Background bands behind each layer's column, from the laid-out boxes. */
 export function lanesOf(view: ComponentsView, layout: Layout): Lane[] {
-  if (view.overview) return []
+  if (view.overview || view.grouped) return []
   const bounds = new Map<Layer, { x0: number; x1: number }>()
   let y0 = Infinity
   let y1 = -Infinity

@@ -120,3 +120,18 @@ export const LaneNodeView = memo(function LaneNodeView({ data }: NodeProps<LaneF
     </div>
   )
 })
+
+export type PackageFlowNode = Node<{ label: string; count: number }, "package">
+
+/** The box around one workspace package. */
+export const PackageNodeView = memo(function PackageNodeView({ data }: NodeProps<PackageFlowNode>) {
+  const color = packageColor(data.label)
+  return (
+    <div className="h-full w-full rounded-2xl border-2 border-dashed" style={{ borderColor: color.value, background: color.tint }}>
+      <p className="flex items-center gap-2 px-4 pt-2.5 text-sm font-semibold" style={{ color: color.value }}>
+        {data.label}
+        <span className="font-mono text-[11px] font-normal text-muted-foreground">{data.count}</span>
+      </p>
+    </div>
+  )
+})
