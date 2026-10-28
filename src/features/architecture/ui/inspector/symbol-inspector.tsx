@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react"
-import { FileCode2, X } from "lucide-react"
+import { AtSign, FileCode2, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { usePeek } from "@/features/peek/model/peek-store"
 import { cn } from "@/lib/utils"
+import { usePromptTags } from "@/shared/workspace/prompt-tags"
 import type { ArchModel } from "@/shared/bindings/ArchModel"
 import type { EdgeKind } from "@/shared/bindings/EdgeKind"
 import type { Member } from "@/shared/bindings/Member"
@@ -43,20 +44,31 @@ function Section({ title, count, children }: { title: string; count?: number; ch
   )
 }
 
-function MemberRow({ member, onPeek }: { member: Member; onPeek: () => void }) {
+function MemberRow({ member, onPeek, onTag }: { member: Member; onPeek: () => void; onTag: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onPeek}
-      title={`${member.signature} (line ${member.line})`}
-      className="flex w-full items-start gap-2 rounded-md px-2 py-1 text-left font-mono text-xs hover:bg-accent hover:text-accent-foreground"
-    >
-      <span className="w-2 shrink-0 text-muted-foreground">{VISIBILITY[member.visibility]}</span>
-      <span className={cn("min-w-0 break-words", member.isStatic && "underline underline-offset-2", member.isAbstract && "italic")}>
-        {member.isAsync && <span className="text-muted-foreground">async </span>}
-        {member.signature}
-      </span>
-    </button>
+    <div className="group flex items-start rounded-md hover:bg-accent hover:text-accent-foreground">
+      <button
+        type="button"
+        onClick={onPeek}
+        title={`${member.signature} (line ${member.line})`}
+        className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1 text-left font-mono text-xs"
+      >
+        <span className="w-2 shrink-0 text-muted-foreground">{VISIBILITY[member.visibility]}</span>
+        <span className={cn("min-w-0 break-words", member.isStatic && "underline underline-offset-2", member.isAbstract && "italic")}>
+          {member.isAsync && <span className="text-muted-foreground">async </span>}
+          {member.signature}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onTag}
+        aria-label={`Tag ${member.name} in prompt`}
+        title="Tag in agent prompt"
+        className="m-0.5 rounded p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-background hover:text-foreground"
+      >
+        <AtSign className="size-3" />
+      </button>
+    </div>
   )
 }
 
@@ -78,6 +90,9 @@ function SymbolLink({ symbol, onClick }: { symbol: SymbolNode; onClick: () => vo
 /** Details for the selected symbol: members with signatures and its relations. */
 export function SymbolInspector({ model, symbol, onNavigate, onClose }: SymbolInspectorProps) {
   const peek = usePeek()
+  const promptTags = usePromptTags()
+  const tagMember = (m: Member) =>
+    promptTags.add({ type: "member", symbolId: symbol.id, member: m.name, label: `${symbol.name}.${m.name}` })
   const { fields, methods } = splitMembers(symbol.members)
   const peekAt = (line: number, title: string) => peek.open({ file: symbol.file, line, title })
 
@@ -133,18 +148,25 @@ export function SymbolInspector({ model, symbol, onNavigate, onClose }: SymbolIn
             </span>
           </Button>
           <p className="mt-2 font-mono text-xs break-words text-muted-foreground">{symbol.signature}</p>
+          <Button
+            size="sm"
+            className="mt-3 w-full"
+            onClick={() => promptTags.add({ type: "symbol", symbolId: symbol.id, label: symbol.name })}
+          >
+            <AtSign /> Add to agent prompt
+          </Button>
         </div>
         {fields.length > 0 && (
           <Section title={symbol.kind === "enum" ? "Members" : "Fields"} count={fields.length}>
             {fields.map((m) => (
-              <MemberRow key={`${m.name}:${m.line}`} member={m} onPeek={() => peekAt(m.line, `${symbol.name}.${m.name}`)} />
+              <MemberRow key={`${m.name}:${m.line}`} member={m} onPeek={() => peekAt(m.line, `${symbol.name}.${m.name}`)} onTag={() => tagMember(m)} />
             ))}
           </Section>
         )}
         {methods.length > 0 && (
           <Section title="Methods" count={methods.length}>
             {methods.map((m) => (
-              <MemberRow key={`${m.name}:${m.line}`} member={m} onPeek={() => peekAt(m.line, `${symbol.name}.${m.name}`)} />
+              <MemberRow key={`${m.name}:${m.line}`} member={m} onPeek={() => peekAt(m.line, `${symbol.name}.${m.name}`)} onTag={() => tagMember(m)} />
             ))}
           </Section>
         )}

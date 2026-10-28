@@ -7,9 +7,12 @@ import type { TerminalInfo } from "@/shared/bindings/TerminalInfo"
 import { Pane, PaneEmpty } from "@/shared/ui/pane"
 import { useIsActiveWorkspace, useWorkspace } from "@/shared/workspace/workspace-context"
 
+import { useModel } from "@/features/architecture/queries/model-queries"
+
 import { useCloseTerminal, useStartTerminal } from "../commands/terminal-commands"
 import { useAgents, useTerminals } from "../queries/agent-queries"
 import { AgentIcon } from "./agent-icon"
+import { Composer } from "./composer"
 import { NewAgentMenu } from "./new-agent-menu"
 import { TerminalView } from "./terminal-view"
 
@@ -22,6 +25,7 @@ export function AgentsPane() {
   const start = useStartTerminal()
   const close = useCloseTerminal(worktree.id)
   const [selected, setSelected] = useState<string | null>(null)
+  const { data: model = null } = useModel(worktree.id)
 
   const active = terminals.find((t) => t.id === selected) ?? terminals[terminals.length - 1]
   const kindOf = (t: TerminalInfo) => agents.find((a) => a.profile.id === t.profileId)?.profile.kind ?? "custom"
@@ -100,6 +104,7 @@ export function AgentsPane() {
               />
             ))}
           </div>
+          <Composer model={model} target={active} />
         </div>
       )}
     </Pane>
