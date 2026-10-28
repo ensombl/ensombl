@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use crate::application::ports::{AgentConnection, AgentLaunch, AgentRuntime, RunEventHandler};
 use crate::application::{Error, Result};
 use crate::domain::agent_run::{
-    RunEvent, ContentBlock, NoticeLevel, PermissionDecision, PermissionMode,
+    ContentBlock, NoticeLevel, PermissionDecision, PermissionMode, RunEvent,
 };
 
 const MAX_TOOL_OUTPUT: usize = 100_000;

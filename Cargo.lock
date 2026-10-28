@@ -607,24 +607,12 @@ dependencies = [
 name = "crm"
 version = "0.1.0"
 dependencies = [
- "blake3",
- "ignore",
- "notify",
- "notify-debouncer-full",
- "portable-pty",
- "rayon",
- "rusqlite",
- "serde",
+ "ensombl-core",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
- "tempfile",
- "thiserror 2.0.21",
- "tree-sitter",
- "tree-sitter-typescript",
- "ts-rs",
 ]
 
 [[package]]
@@ -971,6 +959,26 @@ name = "endi"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
+
+[[package]]
+name = "ensombl-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "ignore",
+ "notify",
+ "notify-debouncer-full",
+ "portable-pty",
+ "rayon",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tree-sitter",
+ "tree-sitter-typescript",
+ "ts-rs",
+]
 
 [[package]]
 name = "enumflags2"

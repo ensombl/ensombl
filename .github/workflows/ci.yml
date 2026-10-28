@@ -41,11 +41,13 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: ". -> target"
       - name: Stub frontend dist
         run: mkdir -p dist
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
-      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Core builds without Tauri
+        run: "! cargo tree -p ensombl-core | grep -q tauri"
       - name: Bindings are up to date
-        run: git diff --exit-code src/shared/bindings
+        run: git diff --exit-code src/shared/bindings && test -z "$(git status --porcelain src/shared/bindings)"

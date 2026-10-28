@@ -3,7 +3,7 @@
 
 use tauri::ipc::{Channel, InvokeResponseBody};
 
-use crate::application::ports::TerminalSink;
+use ensombl_core::application::ports::TerminalSink;
 
 pub struct ChannelSink(pub Channel<InvokeResponseBody>);
 
