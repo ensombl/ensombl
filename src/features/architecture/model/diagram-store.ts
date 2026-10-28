@@ -19,7 +19,7 @@ export interface DiagramState {
 const initial = (): DiagramState => ({
   initialized: false,
   expanded: new Set(),
-  filters: { hideTests: true, showFunctions: false, edgeKinds: ALL_EDGE_KINDS },
+  filters: { hideTests: true, showFunctions: false, edgeKinds: ALL_EDGE_KINDS, allGroupEdges: false },
   selected: null,
   focus: null,
 })

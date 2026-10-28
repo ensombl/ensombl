@@ -1,4 +1,4 @@
-import { ChevronsDownUp, ChevronsUpDown, FlaskConical, FunctionSquare, Search } from "lucide-react"
+import { ChevronsDownUp, ChevronsUpDown, FlaskConical, FunctionSquare, Network, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -6,6 +6,8 @@ import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { EdgeKind } from "@/shared/bindings/EdgeKind"
+
+import { EDGE_STYLE } from "./edge-style"
 
 const EDGE_KINDS: { kind: EdgeKind; label: string; hint: string }[] = [
   { kind: "extends", label: "Extends", hint: "Generalization: solid line, hollow triangle" },
@@ -18,6 +20,8 @@ interface DiagramToolbarProps {
   edgeKinds: EdgeKind[]
   hideTests: boolean
   showFunctions: boolean
+  allGroupEdges: boolean
+  onAllGroupEdges: (all: boolean) => void
   onSearch: () => void
   onEdgeKinds: (kinds: EdgeKind[]) => void
   onHideTests: (hide: boolean) => void
@@ -43,7 +47,18 @@ export function DiagramToolbar(props: DiagramToolbarProps) {
         {EDGE_KINDS.map(({ kind, label, hint }) => (
           <Tooltip key={kind}>
             <TooltipTrigger asChild>
-              <ToggleGroupItem value={kind} className="h-8 px-2.5 text-xs">
+              <ToggleGroupItem value={kind} className="h-8 gap-1.5 px-2.5 text-xs">
+                <svg width="16" height="6" className="shrink-0">
+                  <line
+                    x1="0"
+                    y1="3"
+                    x2="16"
+                    y2="3"
+                    stroke={EDGE_STYLE[kind].color}
+                    strokeWidth="2"
+                    strokeDasharray={EDGE_STYLE[kind].dashed ? "4 3" : undefined}
+                  />
+                </svg>
                 {label}
               </ToggleGroupItem>
             </TooltipTrigger>
@@ -61,6 +76,16 @@ export function DiagramToolbar(props: DiagramToolbarProps) {
         Functions &amp; types
         <Switch checked={props.showFunctions} onCheckedChange={props.onShowFunctions} />
       </Label>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Label className="flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs font-normal">
+            <Network className="size-3.5 text-muted-foreground" />
+            All group edges
+            <Switch checked={props.allGroupEdges} onCheckedChange={props.onAllGroupEdges} />
+          </Label>
+        </TooltipTrigger>
+        <TooltipContent>Off: only the selected package/folder shows its dependencies</TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="ghost" size="icon" className="size-8" onClick={props.onExpandAll} aria-label="Expand one level">

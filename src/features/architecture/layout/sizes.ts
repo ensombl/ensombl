@@ -7,8 +7,8 @@ export const SIZES = {
   symbolHeight: 40,
   symbolMinWidth: 150,
   symbolMaxWidth: 280,
-  packageCollapsed: { width: 230, height: 64 },
-  folderCollapsed: { width: 200, height: 52 },
+  packageCollapsed: { width: 240, height: 56 },
+  folderCollapsed: { width: 200, height: 48 },
   groupPadding: { top: 44, side: 18, bottom: 18 },
 }
 
@@ -20,7 +20,10 @@ export function splitMembers(members: Member[]) {
 
 export function nodeSize(node: ViewNode): { width: number; height: number } {
   if (node.type === "group") {
-    return node.level === "package" ? SIZES.packageCollapsed : SIZES.folderCollapsed
+    const base = node.level === "package" ? SIZES.packageCollapsed : SIZES.folderCollapsed
+    // Wide enough for the label so names aren't truncated.
+    const perChar = node.level === "package" ? 7.6 : 7.2
+    return { width: Math.min(Math.max(base.width, node.label.length * perChar + 96), 340), height: base.height }
   }
   // Compact by design: members live in the inspector, not on the map.
   const chars = node.symbol.name.length + Math.min(node.symbol.typeParams?.length ?? 0, 12)

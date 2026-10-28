@@ -4,9 +4,10 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 import type { SymbolNode as Symbol } from "@/shared/bindings/SymbolNode"
 
+import { packageColor } from "../../model/package-colors"
 import { KindBadge } from "../kind-badge"
 
-export type SymbolFlowNode = Node<{ symbol: Symbol }, "symbol">
+export type SymbolFlowNode = Node<{ symbol: Symbol; pkg: string }, "symbol">
 
 /** A compact class/interface box. Members are shown in the inspector, not on the map. */
 function SymbolNodeView({ data, selected }: NodeProps<SymbolFlowNode>) {
@@ -15,10 +16,11 @@ function SymbolNodeView({ data, selected }: NodeProps<SymbolFlowNode>) {
     <div
       title={`${symbol.signature}\n${symbol.file}:${symbol.range.startLine}`}
       className={cn(
-        "flex h-full w-full items-center gap-2 rounded-lg border bg-card px-2.5 text-card-foreground shadow-sm transition-colors hover:border-ring/60",
+        "flex h-full w-full items-center gap-2 rounded-lg border border-l-[3px] bg-card px-2.5 text-card-foreground shadow-sm transition-colors hover:bg-accent/40",
         symbol.kind === "interface" && "border-dashed",
-        selected && "border-ring ring-2 ring-ring/40",
+        selected && "ring-2 ring-ring",
       )}
+      style={{ borderLeftColor: packageColor(data.pkg).value, borderLeftStyle: "solid" }}
     >
       <Handle type="source" position={Position.Top} className="!opacity-0" />
       <Handle type="target" position={Position.Bottom} className="!opacity-0" />
