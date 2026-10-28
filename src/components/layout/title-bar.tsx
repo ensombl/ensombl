@@ -12,15 +12,14 @@ export function TitleBar({ version }: { version?: string }) {
       data-tauri-drag-region
       className={cn(
         "flex h-[52px] shrink-0 items-center gap-2 border-b bg-sidebar pr-4 select-none",
-        isMac ? "pl-[84px]" : "pl-4",
+        isMac ? "pl-[100px]" : "pl-4",
       )}
     >
       <div data-tauri-drag-region className="pointer-events-none flex items-center gap-2">
         <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <Boxes className="size-3.5" />
         </div>
-        <span className="text-sm font-semibold">CRM</span>
-        <span className="text-sm text-muted-foreground">Clanker Resource Management</span>
+        <span className="text-sm font-semibold" title="Clanker Resource Management">CRM</span>
       </div>
       {version && (
         <Badge variant="outline" className="ml-auto font-mono">
