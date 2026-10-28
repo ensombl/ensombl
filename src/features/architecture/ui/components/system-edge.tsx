@@ -6,8 +6,6 @@ import { roundedPath } from "../../layout/paths"
 import { membersLabel, type ComponentsViewEdge } from "../../model/system-view"
 import { KIND_STYLE, markerFor } from "./system-style"
 
-const MIN_LABEL_ROOM = 120
-
 export type SystemFlowEdge = Edge<
   {
     kind: ComponentsViewEdge["kind"]
@@ -15,7 +13,8 @@ export type SystemFlowEdge = Edge<
     count: number
     highlighted: boolean
     dimmed: boolean
-    showLabel: boolean
+    /** The pointer is on this edge: show what it carries. */
+    hovered: boolean
     /** Lots of edges on screen: draw the rest faintly so highlighted ones read. */
     busy: boolean
     points?: Point[]
@@ -34,10 +33,10 @@ export const SystemEdgeView = memo(function SystemEdgeView({
   data,
 }: EdgeProps<SystemFlowEdge>) {
   const points = data?.points
-  const [path, labelX, labelY, room] =
+  const [path, labelX, labelY] =
     points && points.length >= 2
       ? roundedPath(points)
-      : [...getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 10 }).slice(0, 3), Infinity] as [string, number, number, number]
+      : getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 10 })
   const kind = data?.kind ?? "call"
   const style = KIND_STYLE[kind]
   const count = data?.count ?? 1
@@ -52,13 +51,13 @@ export const SystemEdgeView = memo(function SystemEdgeView({
         markerEnd={`url(#${markerFor(kind)})`}
         style={{
           stroke: style.color,
-          strokeOpacity: data?.highlighted ? 1 : data?.dimmed ? 0.08 : data?.busy ? 0.22 : 0.55,
-          strokeWidth: data?.highlighted ? width + 0.75 : width,
+          strokeOpacity: data?.highlighted || data?.hovered ? 1 : data?.dimmed ? 0.08 : data?.busy ? 0.22 : 0.55,
+          strokeWidth: data?.highlighted || data?.hovered ? width + 0.75 : width,
           strokeDasharray: style.dash,
         }}
       />
-      {/* Only where the segment has room, so labels never sit on boxes or arrowheads. */}
-      {label && (data?.showLabel || data?.highlighted) && room >= MIN_LABEL_ROOM && (
+      {/* One label at a time, for the hovered edge; the inspector lists them all. */}
+      {label && data?.hovered && (
         <EdgeLabelRenderer>
           <div
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}

@@ -44,8 +44,8 @@ import { sideHandles } from "../../layout/handles"
 const nodeTypes = { component: ComponentNodeView, feature: FeatureNodeView, lane: LaneNodeView, package: PackageNodeView }
 const edgeTypes = { system: SystemEdgeView }
 
-/** Edge labels are drawn for every edge only when the view is this small. */
-const LABEL_ALL_EDGES = 12
+/** Above this many edges, unhighlighted ones are drawn faintly. */
+const BUSY_EDGES = 40
 /** Viewport culling kicks in above this many nodes. */
 const CULL_ABOVE = 150
 
@@ -68,6 +68,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   // Remembers which view the hover happened in, so it can't outlive that view.
   const [hover, setHover] = useState<{ id: string; view: unknown } | null>(null)
+  const [hoveredEdge, setHoveredEdge] = useState<string | null>(null)
 
 
   const view = useMemo(() => buildComponentsView(model, focus, filters), [model, focus, filters])
@@ -186,8 +187,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
 
   const edges = useMemo<SystemFlowEdge[]>(() => {
     if (!layout) return []
-    const showLabel = view.edges.length <= LABEL_ALL_EDGES
-    const busy = !showLabel
+    const busy = view.edges.length > BUSY_EDGES
     return view.edges
       .filter((e) => layout.nodes.has(e.source) && layout.nodes.has(e.target))
       .map((e) => {
@@ -205,13 +205,13 @@ function Canvas({ system, onShowCode }: CanvasProps) {
             count: e.count,
             highlighted,
             dimmed: !!focusNode && !highlighted,
-            showLabel,
+            hovered: e.id === hoveredEdge,
             busy,
             points: layout.routes.get(e.id),
           },
         }
       })
-  }, [view, layout, focusNode])
+  }, [view, layout, focusNode, hoveredEdge])
 
   const selectedNode = selected ? model.nodes.find((n) => n.id === selected) : undefined
   const mergeable = multi.filter((id) => model.nodes.some((n) => n.id === id && n.kind === "component"))
@@ -252,6 +252,8 @@ function Canvas({ system, onShowCode }: CanvasProps) {
           }}
           onNodeMouseEnter={(_, node) => node.type !== "lane" && node.type !== "package" && setHover({ id: node.id, view })}
           onNodeMouseLeave={() => setHover(null)}
+          onEdgeMouseEnter={(_, edge) => setHoveredEdge(edge.id)}
+          onEdgeMouseLeave={() => setHoveredEdge(null)}
           onNodeDoubleClick={(_, node) => {
             if (node.type === "feature") ui.focus(node.id)
           }}
