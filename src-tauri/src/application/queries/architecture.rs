@@ -12,7 +12,7 @@ use crate::application::ports::ArchitectureStore;
 use crate::domain::system::boundaries::{self, RULES, Violation};
 use crate::domain::system::flow::{self, FlowStep};
 use crate::domain::system::model::SystemModel;
-use crate::domain::system::overrides;
+use crate::domain::system::overrides::{self, ArchitectureFile};
 use crate::domain::workspace::WorktreeId;
 
 #[derive(Debug, Deserialize, TS)]
@@ -38,6 +38,8 @@ pub struct SystemView {
     pub model: SystemModel,
     pub violations: Vec<Violation>,
     pub rules: Vec<RuleInfo>,
+    /// The raw corrections, so edits can preserve fields they don't touch.
+    pub overrides: ArchitectureFile,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -66,18 +68,19 @@ impl ArchitectureQueries {
         Self { registry, store }
     }
 
-    fn applied(&self, worktree: &str) -> Option<(SystemModel, Vec<String>)> {
+    fn applied(&self, worktree: &str) -> Option<(SystemModel, ArchitectureFile)> {
         let root = self.registry.root(worktree)?;
         let model = self.registry.system(worktree)?;
         let file = self.store.load(&root);
-        Some((overrides::apply(&model, &file), file.disabled_rules))
+        Some((overrides::apply(&model, &file), file))
     }
 }
 
 impl QueryHandler<GetSystem> for ArchitectureQueries {
     fn handle(&self, q: GetSystem) -> Result<Option<SystemView>> {
-        Ok(self.applied(&q.worktree_id).map(|(model, disabled)| {
-            let violations = boundaries::check(&model, &disabled);
+        Ok(self.applied(&q.worktree_id).map(|(model, file)| {
+            let disabled = &file.disabled_rules;
+            let violations = boundaries::check(&model, disabled);
             let rules = RULES
                 .iter()
                 .map(|(id, message)| RuleInfo {
@@ -90,6 +93,7 @@ impl QueryHandler<GetSystem> for ArchitectureQueries {
                 model,
                 violations,
                 rules,
+                overrides: file,
             }
         }))
     }
