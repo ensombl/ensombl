@@ -21,8 +21,9 @@ import { useIsActiveWorkspace, useWorkspace } from "@/shared/workspace/workspace
 import { useArchitectureCommands } from "../../commands/architecture-commands"
 import { runLayout } from "../../layout/run-layout"
 import { flattenLayout, lanesOf, systemLayoutSignature, toSystemElk, type Layout } from "../../layout/system-layout"
+import { useChanges } from "../../model/changes-store"
 import { useSystemUi } from "../../model/system-store"
-import { buildComponentsView } from "../../model/system-view"
+import { buildComponentsView, featureId } from "../../model/system-view"
 import { ComponentInspector } from "./component-inspector"
 import { ComponentSearch } from "./component-search"
 import { ComponentsToolbar } from "./components-toolbar"
@@ -75,6 +76,19 @@ function Canvas({ system, onShowCode }: CanvasProps) {
     }
   }, [signature, flow])
 
+  // Components (and their features) whose code changed on disk.
+  const changes = useChanges()
+  const changedAt = useMemo(() => {
+    const at = new Map<string, number>()
+    for (const n of model.nodes) {
+      const time = Math.max(0, ...n.symbolIds.map((id) => changes.changed[id] ?? 0))
+      if (!time) continue
+      at.set(n.id, time)
+      if (n.kind === "component") at.set(featureId(n), Math.max(at.get(featureId(n)) ?? 0, time))
+    }
+    return at
+  }, [model, changes.changed])
+
   // Highlight what the selected node talks to.
   const neighbors = useMemo(() => {
     if (!selected) return null
@@ -114,19 +128,19 @@ function Canvas({ system, onShowCode }: CanvasProps) {
         const node: FeatureFlowNode = {
           ...base,
           type: "feature",
-          data: { label: n.label, pkg: n.pkg, count: n.count, entryCount: n.entryCount, roles: n.roles, dimmed },
+          data: { label: n.label, pkg: n.pkg, count: n.count, entryCount: n.entryCount, roles: n.roles, dimmed, changedAt: changedAt.get(n.id) },
         }
         return [node]
       }
       const node: ComponentFlowNode = {
         ...base,
         type: "component",
-        data: { node: n.node, entryCount: n.entryCount, context: n.context, dimmed },
+        data: { node: n.node, entryCount: n.entryCount, context: n.context, dimmed, changedAt: changedAt.get(n.id) },
       }
       return [node]
     })
     return [...lanes, ...items]
-  }, [view, layout, selected, multi, neighbors])
+  }, [view, layout, selected, multi, neighbors, changedAt])
 
   const edges = useMemo<SystemFlowEdge[]>(() => {
     if (!layout) return []
@@ -183,8 +197,13 @@ function Canvas({ system, onShowCode }: CanvasProps) {
           }}
           onNodeClick={(event, node) => {
             if (event.shiftKey || node.type === "lane") return
-            if (node.type === "feature") ui.select(null)
-            else ui.select(node.id)
+            if (node.type === "feature") {
+              ui.select(null)
+              return
+            }
+            ui.select(node.id)
+            const picked = model.nodes.find((n) => n.id === node.id)
+            if (picked) changes.ack(picked.symbolIds)
           }}
           onNodeDoubleClick={(_, node) => {
             if (node.type === "feature") ui.focus(node.id)

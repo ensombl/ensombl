@@ -8,6 +8,7 @@ import type { Role } from "@/shared/bindings/Role"
 import type { SystemNode } from "@/shared/bindings/SystemNode"
 
 import { LAYER_LABEL } from "../../layout/system-layout"
+import { ChangeMarker } from "../diagram/change-marker"
 import { packageColor } from "../../model/package-colors"
 import { FeatureIcon, LAYER_COLOR, NodeIcon, ROLE_LABEL } from "./system-style"
 
@@ -19,18 +20,18 @@ const handles = (
 )
 
 export type ComponentFlowNode = Node<
-  { node: SystemNode; entryCount: number; context: boolean; dimmed: boolean },
+  { node: SystemNode; entryCount: number; context: boolean; dimmed: boolean; changedAt?: number },
   "component"
 >
 
 export const ComponentNodeView = memo(function ComponentNodeView({ data, selected }: NodeProps<ComponentFlowNode>) {
-  const { node, entryCount, context, dimmed } = data
+  const { node, entryCount, context, dimmed, changedAt } = data
   const color = LAYER_COLOR[node.layer]
   const special = node.kind !== "component"
   return (
     <div
       className={cn(
-        "flex h-full w-full flex-col justify-center gap-0.5 rounded-lg border bg-card px-2.5 text-card-foreground shadow-xs transition-opacity",
+        "relative flex h-full w-full flex-col justify-center gap-0.5 rounded-lg border bg-card px-2.5 text-card-foreground shadow-xs transition-opacity",
         special && "rounded-full px-4",
         node.kind === "channel" && "border-dashed",
         selected && "ring-2 ring-ring",
@@ -40,6 +41,7 @@ export const ComponentNodeView = memo(function ComponentNodeView({ data, selecte
       style={{ borderLeftColor: special ? undefined : color, borderLeftWidth: special ? undefined : 3 }}
     >
       {handles}
+      <ChangeMarker changedAt={changedAt} />
       <div className="flex min-w-0 items-center gap-1.5">
         <NodeIcon node={node} className="size-3.5 shrink-0" />
         <span className="truncate text-xs font-medium">{node.name}</span>
@@ -58,7 +60,15 @@ export const ComponentNodeView = memo(function ComponentNodeView({ data, selecte
 })
 
 export type FeatureFlowNode = Node<
-  { label: string; pkg: string; count: number; entryCount: number; roles: Partial<Record<Role, number>>; dimmed: boolean },
+  {
+    label: string
+    pkg: string
+    count: number
+    entryCount: number
+    roles: Partial<Record<Role, number>>
+    dimmed: boolean
+    changedAt?: number
+  },
   "feature"
 >
 
@@ -72,13 +82,14 @@ export const FeatureNodeView = memo(function FeatureNodeView({ data, selected }:
   return (
     <div
       className={cn(
-        "flex h-full w-full flex-col justify-center gap-1 rounded-xl border-2 bg-card px-3 shadow-xs",
+        "relative flex h-full w-full flex-col justify-center gap-1 rounded-xl border-2 bg-card px-3 shadow-xs",
         selected && "ring-2 ring-ring",
         data.dimmed && "opacity-25",
       )}
       style={{ borderColor: color.value, background: color.tint }}
     >
       {handles}
+      <ChangeMarker changedAt={data.changedAt} />
       <div className="flex min-w-0 items-center gap-1.5">
         <FeatureIcon className="size-4 shrink-0" style={{ color: color.value }} />
         <span className="truncate text-sm font-semibold">{data.label}</span>
