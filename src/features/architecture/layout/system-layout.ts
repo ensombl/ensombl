@@ -1,4 +1,4 @@
-import type { ElkNode } from "elkjs/lib/elk-api"
+import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api"
 
 import type { Layer } from "@/shared/bindings/Layer"
 
@@ -82,34 +82,54 @@ export function toSystemElk(view: ComponentsView): ElkNode {
       edges,
     }
   }
+  // Each box is laid out on its own (ELK's fast default). Laying out the whole
+  // hierarchy at once is far slower on big maps. Boxes are placed from summary
+  // edges between them; edges across boxes are drawn by the canvas.
+  const parentOf = new Map<string, string>()
   const childrenOf = new Map<string, ComponentsViewNode[]>()
   for (const n of view.nodes) {
     if (n.type === "package" || !n.parent) continue
+    parentOf.set(n.id, n.parent)
     childrenOf.set(n.parent, [...(childrenOf.get(n.parent) ?? []), n])
+  }
+  const inside = new Map<string, ElkExtendedEdge[]>()
+  const between = new Map<string, ElkExtendedEdge>()
+  for (const e of view.edges) {
+    const from = parentOf.get(e.source)
+    const to = parentOf.get(e.target)
+    if (from && from === to) {
+      inside.set(from, [...(inside.get(from) ?? []), { id: e.id, sources: [e.source], targets: [e.target] }])
+      continue
+    }
+    const a = from ?? e.source
+    const b = to ?? e.target
+    const id = `${SUMMARY_EDGE}${a}->${b}`
+    if (a !== b && !between.has(id)) between.set(id, { id, sources: [a], targets: [b] })
   }
   return {
     id: "root",
-    layoutOptions: {
-      ...BASE_OPTIONS,
-      "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-      // Edges cross boxes, so give their routes in root coordinates.
-      "elk.json.edgeCoords": "ROOT",
-      "elk.spacing.componentComponent": "60",
-    },
+    layoutOptions: { ...BASE_OPTIONS, "elk.spacing.nodeNode": "48", "elk.layered.spacing.nodeNodeBetweenLayers": "120" },
     children: view.nodes
       .filter((n) => n.type === "package" || !n.parent)
       .map((n) =>
         n.type === "package"
           ? {
               id: n.id,
-              layoutOptions: { "elk.padding": `[top=${PACKAGE_HEADER + 16},left=20,bottom=20,right=20]` },
+              layoutOptions: {
+                ...BASE_OPTIONS,
+                "elk.padding": `[top=${PACKAGE_HEADER + 16},left=20,bottom=20,right=20]`,
+              },
               children: (childrenOf.get(n.id) ?? []).map(leaf),
+              edges: inside.get(n.id) ?? [],
             }
           : leaf(n),
       ),
-    edges,
+    edges: [...between.values()],
   }
 }
+
+/** Prefix of layout-only edges between boxes; never drawn. */
+export const SUMMARY_EDGE = "summary:"
 
 /** Room for the package name at the top of its box. */
 export const PACKAGE_HEADER = 28

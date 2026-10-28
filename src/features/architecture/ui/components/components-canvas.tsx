@@ -87,7 +87,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
     runLayout(toSystemElk(latest.current))
       .then((result) => {
         if (cancelled) return
-        setLayout(flattenLayout(result, latest.current.grouped))
+        setLayout(flattenLayout(result))
         requestAnimationFrame(() => flow.fitView({ padding: 0.1, maxZoom: 1, duration: 300 }))
       })
       .catch((error) => console.error("layout failed", error))
@@ -110,15 +110,18 @@ function Canvas({ system, onShowCode }: CanvasProps) {
   }, [model, changes.changed])
 
   // Highlight what the selected node talks to.
+  // Nodes dim around the selection only: hover just highlights edges, so
+  // moving the mouse doesn't rebuild every node.
+  const selectedInView = inView(selected)
   const neighbors = useMemo(() => {
-    if (!focusNode) return null
-    const set = new Set([focusNode])
+    if (!selectedInView) return null
+    const set = new Set([selectedInView])
     for (const e of view.edges) {
-      if (e.source === focusNode) set.add(e.target)
-      if (e.target === focusNode) set.add(e.source)
+      if (e.source === selectedInView) set.add(e.target)
+      if (e.target === selectedInView) set.add(e.source)
     }
     return set
-  }, [view, focusNode])
+  }, [view, selectedInView])
 
   const nodes = useMemo<Node[]>(() => {
     if (!layout) return []

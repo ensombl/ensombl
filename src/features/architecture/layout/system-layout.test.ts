@@ -24,7 +24,7 @@ const node = (id: string, pkg: string, extra: Partial<SystemNode> = {}): SystemN
 })
 
 describe("toSystemElk", () => {
-  it("nests packages and returns edge routes in root coordinates", async () => {
+  it("lays out each package box on its own and keeps externals outside", async () => {
     const view: ComponentsView = {
       overview: false,
       grouped: true,
@@ -40,7 +40,9 @@ describe("toSystemElk", () => {
         { id: "e2", source: "Svc", target: "ext:Db", kind: "call", members: [], count: 1 },
       ],
     }
-    const layout = flattenLayout(await new ELK().layout(toSystemElk(view)), true)
+    view.nodes.push({ type: "component", id: "Svc2", parent: "pkg:api", node: node("Svc2", "api"), entryCount: 0, context: false })
+    view.edges.push({ id: "e3", source: "Svc", target: "Svc2", kind: "call", members: [], count: 1 })
+    const layout = flattenLayout(await new ELK().layout(toSystemElk(view)))
     const abs = (id: string, parent?: string) => {
       const box = layout.nodes.get(id)!
       const p = parent ? layout.nodes.get(parent)! : { x: 0, y: 0 }
@@ -48,11 +50,16 @@ describe("toSystemElk", () => {
     }
     const page = abs("Page", "pkg:web")
     const svc = abs("Svc", "pkg:api")
-    const route = layout.routes.get("e1")!
-    // Starts at the page's right edge and ends at the service's left edge, in absolute terms.
-    expect(Math.abs(route[0].x - page.right)).toBeLessThan(2)
-    expect(Math.abs(route[route.length - 1].x - svc.x)).toBeLessThan(2)
+    const svc2 = abs("Svc2", "pkg:api")
+    // Calls flow right: web's box before api's.
+    expect(page.right).toBeLessThan(svc.x)
+    // Edges inside a box are routed, in absolute coordinates.
+    const route = layout.routes.get("e3")!
+    expect(Math.abs(route[0].x - svc.right)).toBeLessThan(2)
+    expect(Math.abs(route[route.length - 1].x - svc2.x)).toBeLessThan(2)
+    // Edges across boxes are left to the canvas.
+    expect(layout.routes.has("e1")).toBe(false)
     // The external sits outside both boxes, to the right.
-    expect(abs("ext:Db").x).toBeGreaterThan(svc.right)
+    expect(abs("ext:Db").x).toBeGreaterThan(Math.max(svc.right, svc2.right))
   })
 })
