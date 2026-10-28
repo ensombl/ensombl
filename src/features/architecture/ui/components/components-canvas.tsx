@@ -28,11 +28,20 @@ import { ComponentInspector } from "./component-inspector"
 import { ComponentSearch } from "./component-search"
 import { ComponentsToolbar } from "./components-toolbar"
 import { SystemEdgeView, type SystemFlowEdge } from "./system-edge"
-import { ComponentNodeView, FeatureNodeView, LaneNodeView, type ComponentFlowNode, type FeatureFlowNode, type LaneFlowNode } from "./system-nodes"
+import {
+  ComponentNodeView,
+  FeatureNodeView,
+  LaneNodeView,
+  PackageNodeView,
+  type ComponentFlowNode,
+  type FeatureFlowNode,
+  type LaneFlowNode,
+  type PackageFlowNode,
+} from "./system-nodes"
 import { SystemMarkers } from "./system-style"
 import { sideHandles } from "../../layout/handles"
 
-const nodeTypes = { component: ComponentNodeView, feature: FeatureNodeView, lane: LaneNodeView }
+const nodeTypes = { component: ComponentNodeView, feature: FeatureNodeView, lane: LaneNodeView, package: PackageNodeView }
 const edgeTypes = { system: SystemEdgeView }
 
 /** Edge labels are drawn for every edge only when the view is this small. */
@@ -78,7 +87,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
     runLayout(toSystemElk(latest.current))
       .then((result) => {
         if (cancelled) return
-        setLayout(flattenLayout(result))
+        setLayout(flattenLayout(result, latest.current.grouped))
         requestAnimationFrame(() => flow.fitView({ padding: 0.1, maxZoom: 1, duration: 300 }))
       })
       .catch((error) => console.error("layout failed", error))
@@ -129,12 +138,28 @@ function Canvas({ system, onShowCode }: CanvasProps) {
     const items = view.nodes.flatMap((n): Node[] => {
       const box = layout.nodes.get(n.id)
       if (!box) return []
+      if (n.type === "package") {
+        // Decoration only: clicks fall through to the pane or the nodes inside.
+        const node: PackageFlowNode = {
+          id: n.id,
+          type: "package",
+          position: { x: box.x, y: box.y },
+          width: box.width,
+          height: box.height,
+          data: { label: n.label, count: n.count },
+          selectable: false,
+          zIndex: -1,
+          style: { pointerEvents: "none" },
+        }
+        return [node]
+      }
       const base = {
         id: n.id,
         position: { x: box.x, y: box.y },
         width: box.width,
         height: box.height,
         handles: sideHandles(box.width, box.height),
+        parentId: n.parent && layout.nodes.has(n.parent) ? n.parent : undefined,
         selected: n.id === selected || multi.includes(n.id),
       }
       const dimmed = !!neighbors && !neighbors.has(n.id)
@@ -212,7 +237,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
             setMulti((prev) => (prev.length === ids.length && prev.every((id, i) => id === ids[i]) ? prev : ids))
           }}
           onNodeClick={(event, node) => {
-            if (event.shiftKey || node.type === "lane") return
+            if (event.shiftKey || node.type === "lane" || node.type === "package") return
             if (node.type === "feature") {
               ui.select(null)
               return
@@ -221,7 +246,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
             const picked = model.nodes.find((n) => n.id === node.id)
             if (picked) changes.ack(picked.symbolIds)
           }}
-          onNodeMouseEnter={(_, node) => node.type !== "lane" && setHover({ id: node.id, view })}
+          onNodeMouseEnter={(_, node) => node.type !== "lane" && node.type !== "package" && setHover({ id: node.id, view })}
           onNodeMouseLeave={() => setHover(null)}
           onNodeDoubleClick={(_, node) => {
             if (node.type === "feature") ui.focus(node.id)

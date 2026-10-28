@@ -105,8 +105,11 @@ export interface Layout {
   routes: Map<string, Point[]>
 }
 
-/** Flattens ELK output: node boxes relative to their parent, edge routes made absolute. */
-export function flattenLayout(root: ElkNode): Layout {
+/**
+ * Flattens ELK output: node boxes relative to their parent, edge routes made
+ * absolute. Pass `absoluteEdges` when the graph asked for root edge coordinates.
+ */
+export function flattenLayout(root: ElkNode, absoluteEdges = false): Layout {
   const nodes = new Map<string, LaidOutNode>()
   const routes = new Map<string, Point[]>()
   const walk = (node: ElkNode, ox: number, oy: number) => {
@@ -114,7 +117,8 @@ export function flattenLayout(root: ElkNode): Layout {
       const section = edge.sections?.[0]
       if (!section) continue
       const points = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint]
-      routes.set(edge.id, points.map((p) => ({ x: p.x + ox, y: p.y + oy })))
+      const [dx, dy] = absoluteEdges ? [0, 0] : [ox, oy]
+      routes.set(edge.id, points.map((p) => ({ x: p.x + dx, y: p.y + dy })))
     }
     for (const child of node.children ?? []) {
       const x = child.x ?? 0

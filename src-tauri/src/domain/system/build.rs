@@ -73,6 +73,7 @@ pub fn build<R: Resolve>(
         owner: HashMap::new(),
         features: HashMap::new(),
         module_dirs: vec![],
+        package_roots: package_roots(files),
         implementers: HashMap::new(),
         calls: vec![],
         entries: vec![],
@@ -116,6 +117,8 @@ struct Builder<'a, R: Resolve> {
     features: HashMap<String, String>,
     /// Folders owned by a Nest module, with its feature.
     module_dirs: Vec<(String, String)>,
+    /// Package name to the folder all its files share.
+    package_roots: HashMap<String, String>,
     implementers: HashMap<String, Vec<String>>,
     calls: Vec<MemberCall>,
     entries: Vec<EntryPoint>,
@@ -123,6 +126,36 @@ struct Builder<'a, R: Resolve> {
     http: Vec<HttpCall>,
     /// File to the path prefix it's mounted under (`app.use('/api', router)`).
     mounts: HashMap<String, String>,
+}
+
+/// The deepest folder shared by all files of each package.
+fn package_roots(files: &HashMap<String, ParsedFile>) -> HashMap<String, String> {
+    let mut roots: HashMap<String, Vec<String>> = HashMap::new();
+    for file in files.values() {
+        let Some(package) = file.symbols.first().map(|s| &s.package) else {
+            continue;
+        };
+        let dirs: Vec<String> = file
+            .path
+            .split('/')
+            .collect::<Vec<_>>()
+            .split_last()
+            .map(|(_, d)| d.iter().map(|s| s.to_string()).collect())
+            .unwrap_or_default();
+        match roots.get_mut(package) {
+            Some(prefix) => {
+                let shared = prefix.iter().zip(&dirs).take_while(|(a, b)| a == b).count();
+                prefix.truncate(shared);
+            }
+            None => {
+                roots.insert(package.clone(), dirs);
+            }
+        }
+    }
+    roots
+        .into_iter()
+        .map(|(package, dirs)| (package, dirs.join("/")))
+        .collect()
 }
 
 fn decorators_of<'f>(file: &'f ParsedFile, symbol: &str) -> Vec<&'f DecoratorSite> {
@@ -266,7 +299,15 @@ impl<'a, R: Resolve> Builder<'a, R> {
                     .max_by_key(|(dir, _)| dir.len())
                     .map(|(_, f)| f.clone())
             })
-            .or_else(|| classify::feature_of(file))
+            // Folders inside the package, not the repo: in `platforms/esigner-api/src/claims`
+            // the feature is `claims`, not `platforms`.
+            .or_else(|| {
+                let root = self.package_roots.get(package).map_or("", String::as_str);
+                let inner = file
+                    .strip_prefix(root)
+                    .map_or(file, |rest| rest.trim_start_matches('/'));
+                classify::feature_of(inner)
+            })
             .unwrap_or_else(|| package.to_string())
     }
 
@@ -1140,12 +1181,18 @@ pub(crate) mod tests {
 
     /// Parses fixture files and builds the system with a simple relative resolver.
     pub fn system(sources: &[(&str, &str)]) -> SystemModel {
+        let with_package: Vec<_> = sources.iter().map(|(p, s)| (*p, "app", *s)).collect();
+        system_in(&with_package)
+    }
+
+    /// Like [`system`], with a package per file.
+    pub fn system_in(sources: &[(&str, &str, &str)]) -> SystemModel {
         let files: HashMap<String, ParsedFile> = sources
             .iter()
-            .map(|(path, src)| {
+            .map(|(path, package, src)| {
                 (
                     path.to_string(),
-                    TreeSitterParser.parse(path, "app", src).unwrap(),
+                    TreeSitterParser.parse(path, package, src).unwrap(),
                 )
             })
             .collect();
@@ -1357,6 +1404,31 @@ export class ClaimLinesModule {}
             interaction(&m, "#ClaimsPage", "#useClaims").kind,
             InteractionKind::Call
         );
+    }
+
+    #[test]
+    fn features_are_named_inside_each_package() {
+        let m = system_in(&[
+            (
+                "platforms/esigner-api/src/claims/claims.service.ts",
+                "esigner-api",
+                "@Injectable()\nexport class ClaimsService {}",
+            ),
+            (
+                "platforms/esigner-api/src/billing/billing.service.ts",
+                "esigner-api",
+                "@Injectable()\nexport class BillingService {}",
+            ),
+            (
+                "platforms/notary/src/notary.service.ts",
+                "notary",
+                "@Injectable()\nexport class NotaryService {}",
+            ),
+        ]);
+        assert_eq!(node(&m, "#ClaimsService").feature, "claims");
+        assert_eq!(node(&m, "#BillingService").feature, "billing");
+        // A package without feature folders is its own feature.
+        assert_eq!(node(&m, "#NotaryService").feature, "notary");
     }
 
     #[test]
