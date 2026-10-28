@@ -27,6 +27,10 @@ use crate::domain::orchestration::{
 use crate::domain::terminal::AgentKind;
 use crate::domain::workspace::ProjectId;
 
+/// What an orchestrated agent is told about its situation. Ensombl owns the
+/// branch: it commits when the run ends and merges on approval.
+pub const TASK_INSTRUCTIONS: &str = "You are working on a task for Ensombl, alone, in your own git worktree on your own branch. Make the changes the task asks for and check they work. Don't commit, push, merge or switch branches: Ensombl commits your work when you finish and merges it once a person approves it. End with a short summary of what you changed.";
+
 /// Topic for task changes; the payload is the [`Task`].
 pub const TASK_CHANGED: &str = "tasks://changed";
 /// Topic for live run events; the payload is a [`RunEventPayload`].
@@ -353,7 +357,12 @@ impl Inner {
         let connection = runtime.start(
             AgentLaunch {
                 program,
-                args: vec![],
+                args: match task.agent {
+                    AgentKind::Claude => {
+                        vec!["--append-system-prompt".into(), TASK_INSTRUCTIONS.into()]
+                    }
+                    _ => vec![],
+                },
                 cwd: worktree,
                 env: self.ports.shell.env(),
                 resume,
@@ -954,6 +963,7 @@ mod tests {
             assert_eq!(launch.cwd, PathBuf::from(&worktree));
             assert_eq!(launch.program, PathBuf::from("/usr/local/bin/claude"));
             assert_eq!(launch.permission_mode, PermissionMode::AcceptEdits);
+            assert_eq!(launch.args, ["--append-system-prompt", TASK_INSTRUCTIONS]);
             assert_eq!(runs[0].sent, ["please Add login"]);
         }
 
@@ -1185,5 +1195,165 @@ mod tests {
             queue: false,
         };
         assert!(h.cmds.handle(unknown).is_err());
+    }
+}
+
+/// End to end against the real `claude` CLI and git:
+/// `cargo test -p ensombl-core real_claude_task -- --ignored --nocapture`
+#[cfg(test)]
+mod smoke {
+    use super::*;
+    use crate::domain::workspace::Session;
+    use crate::infrastructure::claude_headless::ClaudeCode;
+    use crate::infrastructure::git_cli::GitCli;
+    use crate::infrastructure::jsonl_run_log::JsonlRunLog;
+    use crate::infrastructure::login_shell::LoginShell;
+    use crate::infrastructure::sqlite_tasks::SqliteTasks;
+    use crate::infrastructure::system_clock::SystemClock;
+    use std::process::Command as Process;
+    use std::time::{Duration, Instant};
+
+    struct Sessions(Session);
+    impl SessionRepository for Sessions {
+        fn get(&self) -> Result<Session> {
+            Ok(self.0.clone())
+        }
+        fn update(&self, f: &mut dyn FnMut(&mut Session) -> Result<()>) -> Result<()> {
+            f(&mut self.0.clone())
+        }
+    }
+
+    struct Print;
+    impl EventBus for Print {
+        fn publish(&self, topic: &str, payload: serde_json::Value) {
+            if topic == TASK_CHANGED {
+                println!("task -> {}", payload["status"]);
+            } else if payload["event"]["type"] == "permission"
+                || payload["event"]["type"] == "notice"
+            {
+                println!("{}", payload["event"]);
+            }
+        }
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let ok = Process::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .status()
+            .unwrap();
+        assert!(ok.success(), "git {args:?}");
+    }
+
+    #[test]
+    #[ignore]
+    fn real_claude_task() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        std::fs::write(repo.join("README.md"), "# demo\n").unwrap();
+        git(&repo, &["add", "."]);
+        git(
+            &repo,
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "-qm",
+                "init",
+            ],
+        );
+
+        let mut session = Session::default();
+        session.add_project("p".into(), "demo".into(), repo.to_string_lossy().into());
+        let tasks = Arc::new(SqliteTasks::in_memory().unwrap());
+        let mut runtimes: HashMap<AgentKind, Arc<dyn AgentRuntime>> = HashMap::new();
+        runtimes.insert(AgentKind::Claude, Arc::new(ClaudeCode));
+        let cmds = TaskCommands::new(TaskPorts {
+            tasks: tasks.clone(),
+            log: Arc::new(JsonlRunLog::new(dir.path().join("runs"))),
+            runtimes,
+            sessions: Arc::new(Sessions(session)),
+            shell: Arc::new(LoginShell::detect()),
+            git: Arc::new(GitCli),
+            task_git: Arc::new(GitCli),
+            bus: Arc::new(Print),
+            clock: Arc::new(SystemClock),
+            worktrees_dir: dir.path().join("worktrees"),
+            concurrency: 1,
+        });
+        let task = cmds
+            .handle(CreateTask {
+                project_id: "p".into(),
+                title: "Add notes".into(),
+                prompt: "Create a file notes.txt containing exactly the word hi, using the Write tool. Then reply done.".into(),
+                agent: AgentKind::Claude,
+                base_branch: "main".into(),
+                depends_on: vec![],
+                permission: PermissionMode::AcceptEdits,
+                queue: true,
+            })
+            .unwrap();
+
+        let deadline = Instant::now() + Duration::from_secs(240);
+        let queries = crate::application::queries::tasks::TaskQueries::new(
+            tasks.clone(),
+            Arc::new(JsonlRunLog::new(dir.path().join("runs"))),
+            Arc::new(Sessions(Session::default())),
+            Arc::new(GitCli),
+        );
+        let finished = loop {
+            let t = tasks.get(&task.id).unwrap().unwrap();
+            if !t.status.is_active() {
+                break t;
+            }
+            if t.status == TaskStatus::NeedsInput {
+                use crate::application::cqrs::QueryHandler;
+                let detail = queries
+                    .handle(crate::application::queries::tasks::GetTask {
+                        task_id: t.id.clone(),
+                    })
+                    .unwrap();
+                if let Some(pending) = detail.pending {
+                    println!("allowing {}", pending.tool_name);
+                    cmds.handle(RespondToTask {
+                        task_id: t.id.clone(),
+                        request_id: pending.request_id,
+                        decision: PermissionDecision {
+                            allow: true,
+                            remember: false,
+                            updated_input: None,
+                            message: None,
+                        },
+                    })
+                    .unwrap();
+                }
+            }
+            assert!(Instant::now() < deadline, "timed out in {:?}", t.status);
+            std::thread::sleep(Duration::from_millis(500));
+        };
+        println!(
+            "summary: {:?} error: {:?}",
+            finished.summary, finished.error
+        );
+        assert_eq!(finished.status, TaskStatus::Review);
+        let runs = tasks.runs(&task.id).unwrap();
+        println!("cost: {:?}", runs[0].cost_usd);
+
+        cmds.handle(ApproveTask {
+            task_id: task.id.clone(),
+        })
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(repo.join("notes.txt"))
+                .unwrap()
+                .trim(),
+            "hi"
+        );
+        assert!(!Path::new(finished.worktree.as_deref().unwrap()).exists());
     }
 }
