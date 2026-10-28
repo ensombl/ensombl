@@ -11,8 +11,8 @@ export function TitleBar({ version, children }: { version?: string; children?: R
     <header
       data-tauri-drag-region
       className={cn(
-        "flex h-9 shrink-0 items-center gap-2 border-b bg-sidebar pr-2 select-none",
-        isMac ? "pl-[76px]" : "pl-2",
+        "flex h-10 shrink-0 items-center gap-2 border-b bg-sidebar pr-2 select-none",
+        isMac ? "pl-[86px]" : "pl-2",
       )}
     >
       {children}

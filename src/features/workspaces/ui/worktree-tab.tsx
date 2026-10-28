@@ -39,7 +39,7 @@ export function WorktreeTab({ tab, active, accent }: WorktreeTabProps) {
           }}
           onClick={() => !active && activate.mutate({ worktreeId: worktree.id })}
           className={cn(
-            "group relative flex h-6 max-w-44 shrink-0 cursor-default items-center gap-1 rounded pr-0.5 pl-2 text-xs transition-colors",
+            "group relative flex h-7 max-w-44 shrink-0 cursor-default items-center gap-1 rounded pr-0.5 pl-2 text-xs transition-colors",
             active
               ? "bg-accent text-accent-foreground"
               : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
@@ -61,7 +61,7 @@ export function WorktreeTab({ tab, active, accent }: WorktreeTabProps) {
           >
             <X className="size-3" />
           </button>
-          <span className={cn("absolute inset-x-2 -bottom-[5px] h-0.5 rounded-full", accent)} />
+          <span className={cn("absolute inset-x-2 -bottom-[6px] h-0.5 rounded-full", accent)} />
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
