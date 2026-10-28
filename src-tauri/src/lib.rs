@@ -5,8 +5,9 @@ use std::sync::Arc;
 use ensombl_core::app::{AppPaths, Core};
 use tauri::Manager;
 
+use ensombl_server::BroadcastBus;
 use interface::commands as cmd;
-use interface::events::TauriBus;
+use interface::events::{FanoutBus, TauriBus};
 
 /// Wires the core up inside Tauri: paths from the OS, events to the webview.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -16,13 +17,27 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let paths = app.path();
+            let data_dir = paths.app_data_dir()?;
+            let api_bus = BroadcastBus::new();
             let core = Core::build(
                 AppPaths {
-                    data_dir: paths.app_data_dir()?,
+                    data_dir: data_dir.clone(),
                     worktrees_dir: paths.home_dir()?.join(".crm").join("worktrees"),
                 },
-                Arc::new(TauriBus(app.handle().clone())),
+                Arc::new(FanoutBus(vec![
+                    Arc::new(TauriBus(app.handle().clone())),
+                    Arc::new(api_bus.clone()),
+                ])),
             )?;
+            // The same API as ensombl-server, on localhost, for local tools
+            // like the MCP bridge the lead agent uses.
+            if let Err(e) = ensombl_server::spawn_local(
+                core.handlers.clone(),
+                &api_bus,
+                &data_dir.join("api.json"),
+            ) {
+                eprintln!("local API unavailable: {e}");
+            }
             app.manage(core.handlers.clone());
             app.manage(Arc::new(core));
             Ok(())

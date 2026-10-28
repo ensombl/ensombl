@@ -118,3 +118,38 @@ async fn streams_events_over_websocket() {
     );
     core.shutdown();
 }
+
+#[tokio::test]
+async fn the_local_api_writes_where_to_find_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let bus = BroadcastBus::new();
+    let core = core(dir.path(), &bus);
+    let file = dir.path().join("data").join("api.json");
+    let api = ensombl_server::spawn_local(core.handlers.clone(), &bus, &file).unwrap();
+    let read = ensombl_server::LocalApi::read(&file).unwrap();
+    assert_eq!(read.url, api.url);
+    assert_eq!(read.token.len(), 48);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+    // It answers over real HTTP with the token.
+    let addr = api.url.trim_start_matches("http://").to_string();
+    let response = tokio::task::spawn_blocking(move || {
+        use std::io::{Read, Write};
+        let mut stream = std::net::TcpStream::connect(addr).unwrap();
+        write!(stream, "POST /api/list_tasks HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}", read.token).unwrap();
+        let mut out = String::new();
+        stream.read_to_string(&mut out).unwrap();
+        out
+    })
+    .await
+    .unwrap();
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+    assert!(response.ends_with("[]"));
+    core.shutdown();
+}
