@@ -44,7 +44,9 @@ export const ComponentNodeView = memo(function ComponentNodeView({ data, selecte
       <ChangeMarker changedAt={changedAt} />
       <div className="flex min-w-0 items-center gap-1.5">
         <NodeIcon node={node} className="size-3.5 shrink-0" />
-        <span className="truncate text-xs font-medium">{node.name}</span>
+        <span className="truncate text-xs font-medium" title={node.name}>
+          {node.name}
+        </span>
         {entryCount > 0 && (
           <span className="ml-auto flex shrink-0 items-center gap-0.5 font-mono text-[10px] text-muted-foreground" title="Entry points">
             <DoorOpen className="size-3" />
@@ -92,11 +94,13 @@ export const FeatureNodeView = memo(function FeatureNodeView({ data, selected }:
       <ChangeMarker changedAt={data.changedAt} />
       <div className="flex min-w-0 items-center gap-1.5">
         <FeatureIcon className="size-4 shrink-0" style={{ color: color.value }} />
-        <span className="truncate text-sm font-semibold">{data.label}</span>
-        <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">{data.pkg}</span>
+        <span className="truncate text-sm font-semibold" title={data.label}>
+          {data.label}
+        </span>
       </div>
-      <p className="truncate text-[11px] text-muted-foreground">
+      <p className="truncate text-[11px] text-muted-foreground" title={data.pkg}>
         {data.count} components{data.entryCount > 0 && ` · ${data.entryCount} entry points`}
+        <span className="font-mono text-[10px]"> · {data.pkg}</span>
       </p>
       <p className="truncate text-[10px] text-muted-foreground/80">
         {roles.map(([role, n]) => `${n} ${ROLE_LABEL[role as Role].toLowerCase()}`).join(" · ")}

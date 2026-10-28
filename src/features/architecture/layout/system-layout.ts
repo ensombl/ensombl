@@ -34,7 +34,18 @@ const lane = (n: ComponentsViewNode): number => {
   return LANE_ORDER[n.node.layer]
 }
 
-export const sizeOf = (n: ComponentsViewNode) => (n.type === "feature" ? SYSTEM_SIZES.feature : SYSTEM_SIZES.component)
+const MAX_WIDTH = 360
+
+/** Wide enough for the name (icon, padding and badges included), so labels aren't cut off. */
+export function sizeOf(n: ComponentsViewNode): { width: number; height: number } {
+  if (n.type === "feature") {
+    const width = Math.min(Math.max(SYSTEM_SIZES.feature.width, n.label.length * 8.6 + 64), MAX_WIDTH)
+    return { width: Math.ceil(width), height: SYSTEM_SIZES.feature.height }
+  }
+  const badge = n.entryCount > 0 ? 36 : 0
+  const width = Math.min(Math.max(SYSTEM_SIZES.component.width, n.node.name.length * 7.2 + 56 + badge), MAX_WIDTH)
+  return { width: Math.ceil(width), height: SYSTEM_SIZES.component.height }
+}
 
 /** Flat layered graph, flowing right: callers on the left, what they depend on to the right. */
 export function toSystemElk(view: ComponentsView): ElkNode {
@@ -101,5 +112,6 @@ export function lanesOf(view: ComponentsView, layout: Layout): Lane[] {
 }
 
 export function systemLayoutSignature(view: ComponentsView): string {
-  return `${view.nodes.map((n) => n.id).join(";")}#${view.edges.map((e) => e.id).join(";")}`
+  const nodes = view.nodes.map((n) => `${n.id}|${sizeOf(n).width}`)
+  return `${nodes.join(";")}#${view.edges.map((e) => e.id).join(";")}`
 }
