@@ -18,7 +18,7 @@ use crate::application::ports::{
 };
 use crate::application::{Error, Result};
 use crate::domain::linker::Linker;
-use crate::domain::model::{ArchModel, SymbolNode};
+use crate::domain::model::{ArchModel, Edge, ModelDelta, SymbolNode};
 use crate::domain::parsed::ParsedFile;
 use crate::domain::workspace::WorktreeId;
 
@@ -203,7 +203,7 @@ impl CommandHandler<IndexWorktree> for IndexingCommands {
         self.registry.insert(id, index);
 
         self.ports.events.progress(id, total, total);
-        self.ports.events.updated(id, &[], &[]);
+        self.ports.events.updated(id, None);
         self.ports.watcher.watch(id, &root)?;
         Ok(summary)
     }
@@ -269,14 +269,39 @@ impl CommandHandler<ReindexPaths> for IndexingCommands {
                 }
             }
             let removed: Vec<String> = before.into_keys().filter(|id| !seen.contains(id)).collect();
+            let old_edges: HashSet<Edge> =
+                std::mem::take(&mut index.model.edges).into_iter().collect();
             index.model = build_model(&index.root, &index.files, index.resolver.as_ref());
-            (changed, removed)
+            let new_edges: HashSet<&Edge> = index.model.edges.iter().collect();
+            let changed: HashSet<String> = changed.into_iter().collect();
+            ModelDelta {
+                upserted: index
+                    .model
+                    .symbols
+                    .iter()
+                    .filter(|s| changed.contains(&s.id))
+                    .cloned()
+                    .collect(),
+                removed,
+                edges_added: index
+                    .model
+                    .edges
+                    .iter()
+                    .filter(|e| !old_edges.contains(*e))
+                    .cloned()
+                    .collect(),
+                edges_removed: old_edges
+                    .iter()
+                    .filter(|e| !new_edges.contains(e))
+                    .cloned()
+                    .collect(),
+            }
         });
 
-        if let Some((changed, removed)) = diff
-            && (!changed.is_empty() || !removed.is_empty())
+        if let Some(delta) = diff
+            && !delta.is_empty()
         {
-            self.ports.events.updated(id, &changed, &removed);
+            self.ports.events.updated(id, Some(&delta));
         }
         Ok(())
     }
@@ -321,14 +346,11 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct Events(Mutex<Vec<(Vec<String>, Vec<String>)>>);
+    struct Events(Mutex<Vec<Option<ModelDelta>>>);
     impl IndexEvents for Events {
         fn progress(&self, _: &str, _: usize, _: usize) {}
-        fn updated(&self, _: &str, changed: &[String], removed: &[String]) {
-            self.0
-                .lock()
-                .unwrap()
-                .push((changed.to_vec(), removed.to_vec()));
+        fn updated(&self, _: &str, delta: Option<&ModelDelta>) {
+            self.0.lock().unwrap().push(delta.cloned());
         }
     }
 
@@ -459,7 +481,9 @@ mod tests {
         })
         .unwrap();
 
-        let (mut changed, mut removed) = events.0.lock().unwrap().last().cloned().unwrap();
+        let delta = events.0.lock().unwrap().last().cloned().unwrap().unwrap();
+        let mut changed: Vec<_> = delta.upserted.iter().map(|s| s.id.as_str()).collect();
+        let mut removed = delta.removed.clone();
         changed.sort();
         removed.sort();
         assert_eq!(changed, ["a.ts#A", "a.ts#New"]);
@@ -472,6 +496,35 @@ mod tests {
             .map(|s| s.name)
             .collect();
         assert_eq!(names, ["A", "New"]);
+    }
+
+    #[test]
+    fn reindex_reports_edge_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, "a.ts", "export class A {}");
+        write(root, "b.ts", "export class B {}");
+        let (cmds, _, events, _) = setup(root);
+        cmds.handle(IndexWorktree {
+            worktree_id: "wt".into(),
+            force: false,
+        })
+        .unwrap();
+
+        write(
+            root,
+            "b.ts",
+            "import { A } from './a';\nexport class B extends A {}",
+        );
+        cmds.handle(ReindexPaths {
+            worktree_id: "wt".into(),
+            paths: vec!["b.ts".into()],
+        })
+        .unwrap();
+        let delta = events.0.lock().unwrap().last().cloned().unwrap().unwrap();
+        assert_eq!(delta.edges_added.len(), 1);
+        assert_eq!(delta.edges_added[0].to, "a.ts#A");
+        assert!(delta.edges_removed.is_empty());
     }
 
     #[test]
@@ -520,6 +573,8 @@ mod smoke {
         let mut packages: Vec<_> = packages.into_iter().collect();
         packages.sort_by_key(|p| std::cmp::Reverse(p.1));
         println!("top packages: {:?}", &packages[..packages.len().min(8)]);
+        let json = serde_json::to_vec(&model).unwrap();
+        println!("model json: {} KB", json.len() / 1024);
         let patterns = crate::domain::patterns::detect(&model);
         let mut by_kind: HashMap<String, usize> = HashMap::new();
         for p in &patterns {
@@ -564,7 +619,7 @@ mod tests_support {
     }
     impl IndexEvents for Quiet {
         fn progress(&self, _: &str, _: usize, _: usize) {}
-        fn updated(&self, _: &str, _: &[String], _: &[String]) {}
+        fn updated(&self, _: &str, _: Option<&ModelDelta>) {}
     }
 
     pub fn setup_for(root: &Path) -> (IndexingCommands, Arc<IndexRegistry>) {

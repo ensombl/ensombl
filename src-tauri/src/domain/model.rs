@@ -108,3 +108,24 @@ pub struct ArchModel {
     pub symbols: Vec<SymbolNode>,
     pub edges: Vec<Edge>,
 }
+
+/// What changed in a model after an incremental reindex.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ModelDelta {
+    /// Added or modified symbols.
+    pub upserted: Vec<SymbolNode>,
+    pub removed: Vec<String>,
+    pub edges_added: Vec<Edge>,
+    pub edges_removed: Vec<Edge>,
+}
+
+impl ModelDelta {
+    pub fn is_empty(&self) -> bool {
+        self.upserted.is_empty()
+            && self.removed.is_empty()
+            && self.edges_added.is_empty()
+            && self.edges_removed.is_empty()
+    }
+}

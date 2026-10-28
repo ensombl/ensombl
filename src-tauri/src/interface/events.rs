@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter};
 use ts_rs::TS;
 
 use crate::application::ports::IndexEvents;
+use crate::domain::model::ModelDelta;
 
 pub const INDEX_PROGRESS: &str = "index://progress";
 pub const MODEL_UPDATED: &str = "index://updated";
@@ -23,9 +24,8 @@ pub struct IndexProgress {
 #[ts(export)]
 pub struct ModelUpdated {
     pub worktree_id: String,
-    /// Symbol ids added or modified; empty after a full (re)index.
-    pub changed: Vec<String>,
-    pub removed: Vec<String>,
+    /// Incremental change; `null` after a full (re)index, meaning refetch.
+    pub delta: Option<ModelDelta>,
 }
 
 pub struct TauriEvents(pub AppHandle);
@@ -42,13 +42,12 @@ impl IndexEvents for TauriEvents {
         );
     }
 
-    fn updated(&self, worktree: &str, changed: &[String], removed: &[String]) {
+    fn updated(&self, worktree: &str, delta: Option<&ModelDelta>) {
         let _ = self.0.emit(
             MODEL_UPDATED,
             ModelUpdated {
                 worktree_id: worktree.into(),
-                changed: changed.to_vec(),
-                removed: removed.to_vec(),
+                delta: delta.cloned(),
             },
         );
     }

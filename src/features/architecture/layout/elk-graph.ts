@@ -126,3 +126,15 @@ export function flattenLayout(root: ElkNode): Layout {
   walk(root, 0, 0)
   return { nodes, routes }
 }
+
+/**
+ * Everything about a view that affects layout. When it's unchanged (e.g. a
+ * symbol's members changed but nothing moved), the previous layout is kept.
+ */
+export function layoutSignature(view: DiagramView): string {
+  const nodes = view.nodes.map((n) => {
+    const { width, height } = isContainer(n) ? { width: 0, height: 0 } : nodeSize(n)
+    return `${n.id}|${n.parent ?? ""}|${width}x${height}|${n.type === "group" && n.expanded ? 1 : 0}`
+  })
+  return `${nodes.join(";")}#${view.edges.map((e) => e.id).join(";")}`
+}

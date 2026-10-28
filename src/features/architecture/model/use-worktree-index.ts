@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 
+import type { ArchModel } from "@/shared/bindings/ArchModel"
 import type { IndexProgress } from "@/shared/bindings/IndexProgress"
 import type { ModelUpdated } from "@/shared/bindings/ModelUpdated"
 import { useBackendEvent } from "@/shared/ipc/events"
 
 import { dropIndex, useIndexWorktree } from "../commands/indexing-commands"
+import { applyDelta } from "./apply-delta"
 import { useChangesStore } from "./changes-store"
 import { modelKeys, useModel } from "../queries/model-queries"
 
@@ -35,8 +37,15 @@ export function useWorktreeIndex(worktreeId: string) {
   const markChanged = useChangesStore((s) => s.mark)
   useBackendEvent<ModelUpdated>("index://updated", (u) => {
     if (u.worktreeId !== worktreeId) return
-    client.invalidateQueries({ queryKey: modelKeys.model(worktreeId) })
-    if (u.changed.length > 0) markChanged(worktreeId, u.changed)
+    const key = modelKeys.model(worktreeId)
+    const current = client.getQueryData<ArchModel | null>(key)
+    if (!u.delta || !current) {
+      client.invalidateQueries({ queryKey: key })
+      return
+    }
+    // Patch in place: the full model can be megabytes on big repos.
+    client.setQueryData(key, applyDelta(current, u.delta))
+    if (u.delta.upserted.length > 0) markChanged(worktreeId, u.delta.upserted.map((s) => s.id))
   })
 
   return {
