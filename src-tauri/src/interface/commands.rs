@@ -15,6 +15,10 @@ use ensombl_core::application::commands::review::{
     AddComment, DeleteComment, EditorLaunch, OpenInEditor, ResolveComment, SaveSource,
     UpdateSettings,
 };
+use ensombl_core::application::commands::tasks::{
+    ApproveTask, CancelTask, CreateTask, DeleteTask, QueueTask, RespondToTask, RetryTask,
+    SendFollowUp,
+};
 use ensombl_core::application::commands::terminals::{
     AttachTerminal, CloseTerminal, ResizeTerminal, StartTerminal, WithSink, WriteTerminal,
 };
@@ -32,12 +36,17 @@ use ensombl_core::application::queries::patterns::{GetPatterns, PatternView};
 use ensombl_core::application::queries::review::{
     GetSettings, ListComments, ReadSource, SourceText,
 };
+use ensombl_core::application::queries::tasks::{
+    GetRunLog, GetTask, GetTaskDiff, ListTasks, TaskDetail,
+};
 use ensombl_core::application::queries::terminals::{AgentAvailability, ListAgents, ListTerminals};
 use ensombl_core::application::queries::workspaces::{
     GetSession, ListBranches, ListWorktrees, SessionView, WorktreeListing,
 };
 use ensombl_core::application::{Error, Result};
+use ensombl_core::domain::agent_run::RunEvent;
 use ensombl_core::domain::model::ArchModel;
+use ensombl_core::domain::orchestration::Task;
 use ensombl_core::domain::review::{AnchoredComment, ReviewComment};
 use ensombl_core::domain::system::flow::FlowStep;
 use ensombl_core::domain::terminal::TerminalInfo;
@@ -334,4 +343,79 @@ pub async fn list_files(
     input: ListFiles,
 ) -> Result<Vec<String>> {
     blocking(&handlers.file_queries, move |h| h.handle(input)).await
+}
+
+// Orchestrated tasks. Commands start agents and touch git, so they run off
+// the main thread.
+
+#[tauri::command]
+pub async fn list_tasks(handlers: State<'_, Arc<Handlers>>, input: ListTasks) -> Result<Vec<Task>> {
+    blocking(&handlers.task_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn get_task(handlers: State<'_, Arc<Handlers>>, input: GetTask) -> Result<TaskDetail> {
+    blocking(&handlers.task_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn get_run_log(
+    handlers: State<'_, Arc<Handlers>>,
+    input: GetRunLog,
+) -> Result<Vec<RunEvent>> {
+    blocking(&handlers.task_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn get_task_diff(
+    handlers: State<'_, Arc<Handlers>>,
+    input: GetTaskDiff,
+) -> Result<String> {
+    blocking(&handlers.task_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn create_task(handlers: State<'_, Arc<Handlers>>, input: CreateTask) -> Result<Task> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn queue_task(handlers: State<'_, Arc<Handlers>>, input: QueueTask) -> Result<Task> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn cancel_task(handlers: State<'_, Arc<Handlers>>, input: CancelTask) -> Result<Task> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn retry_task(handlers: State<'_, Arc<Handlers>>, input: RetryTask) -> Result<Task> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn respond_to_task(
+    handlers: State<'_, Arc<Handlers>>,
+    input: RespondToTask,
+) -> Result<()> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn send_follow_up(
+    handlers: State<'_, Arc<Handlers>>,
+    input: SendFollowUp,
+) -> Result<Task> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn approve_task(handlers: State<'_, Arc<Handlers>>, input: ApproveTask) -> Result<Task> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn delete_task(handlers: State<'_, Arc<Handlers>>, input: DeleteTask) -> Result<()> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
 }

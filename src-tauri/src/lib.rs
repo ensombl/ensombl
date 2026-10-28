@@ -68,6 +68,18 @@ pub fn run() {
             cmd::split_component,
             cmd::set_rule_enabled,
             cmd::list_files,
+            cmd::list_tasks,
+            cmd::get_task,
+            cmd::get_run_log,
+            cmd::get_task_diff,
+            cmd::create_task,
+            cmd::queue_task,
+            cmd::cancel_task,
+            cmd::retry_task,
+            cmd::respond_to_task,
+            cmd::send_follow_up,
+            cmd::approve_task,
+            cmd::delete_task,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
