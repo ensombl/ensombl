@@ -10,6 +10,7 @@ import { useTaskEvents } from "../model/use-task-events"
 import { useCoordination, useTasks } from "../queries/task-queries"
 import { NewTaskDialog } from "./new-task-dialog"
 import { TaskBoard } from "./task-board"
+import { RunControls } from "./run-controls"
 import { TaskDetailPanel } from "./task-detail"
 
 /** The project's orchestrated tasks: a board, and the selected task beside it. */
@@ -18,6 +19,7 @@ export function TasksView() {
   const { data: tasks = [] } = useTasks(worktree.projectId)
   const [selected, setSelected] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const running = tasks.filter((t) => t.status === "running" || t.status === "needsInput" || t.status === "queued").length
   const live = tasks.some((t) => t.status === "running" || t.status === "needsInput" || t.status === "review")
   const { data: coordination = [] } = useCoordination(worktree.projectId, live)
   useTaskEvents()
@@ -56,9 +58,9 @@ export function TasksView() {
       <ResizablePanel id="task-board" minSize="30" className="flex min-w-0 flex-col">
         <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
           <span className="text-xs text-muted-foreground">
-            {tasks.filter((t) => t.status === "running" || t.status === "needsInput").length} running ·{" "}
-            {tasks.filter((t) => t.status === "review").length} to review
+            {running} running · {tasks.filter((t) => t.status === "review").length} to review
           </span>
+          <RunControls projectId={worktree.projectId} running={running} />
           <Button size="sm" className="ml-auto h-7" onClick={() => setCreating(true)}>
             <Plus /> New task
           </Button>

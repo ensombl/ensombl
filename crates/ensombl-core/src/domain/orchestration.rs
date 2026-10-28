@@ -209,6 +209,30 @@ pub fn branch_name(title: &str, id: &str) -> String {
     }
 }
 
+/// The prompt a run starts with. Tasks that build on others hear what those
+/// did: in place of `{{deps}}` when the prompt asks for it, otherwise first.
+pub fn compose_prompt(prompt: &str, base: &str, deps: &[(String, Option<String>)]) -> String {
+    if deps.is_empty() {
+        return prompt.replace("{{deps}}", "");
+    }
+    let list = deps
+        .iter()
+        .map(|(title, summary)| {
+            format!(
+                "- {title}: {}",
+                summary.as_deref().unwrap_or("(no summary)").trim()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if prompt.contains("{{deps}}") {
+        return prompt.replace("{{deps}}", &list);
+    }
+    format!(
+        "This builds on earlier tasks, already merged into {base}:\n{list}\n\nYour task:\n{prompt}"
+    )
+}
+
 /// Task worktrees aren't tabs; they're addressed as `task:<id>`.
 pub fn task_worktree_id(task_id: &str) -> String {
     format!("task:{task_id}")
@@ -418,6 +442,20 @@ mod tests {
         assert_eq!(schedule(&[child.clone(), parent], 1), ["child"]);
         // A dependency that doesn't exist never unblocks.
         assert!(schedule(&[child], 1).is_empty());
+    }
+
+    #[test]
+    fn prompts_carry_what_dependencies_did() {
+        assert_eq!(compose_prompt("do it", "main", &[]), "do it");
+        let deps = [("Add API".to_string(), Some("Added /claims".to_string()))];
+        assert_eq!(
+            compose_prompt("do it", "main", &deps),
+            "This builds on earlier tasks, already merged into main:\n- Add API: Added /claims\n\nYour task:\ndo it"
+        );
+        assert_eq!(
+            compose_prompt("Before: {{deps}}. Now go.", "main", &deps),
+            "Before: - Add API: Added /claims. Now go."
+        );
     }
 
     #[test]

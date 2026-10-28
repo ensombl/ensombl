@@ -76,6 +76,28 @@ pub struct TaskCoordination {
     pub overlaps: Vec<Overlap>,
 }
 
+/// What runs have cost.
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GetUsage {
+    #[ts(optional)]
+    pub project_id: Option<ProjectId>,
+    /// Start of "today" in ms, from the asker's clock and time zone.
+    #[ts(type = "number")]
+    pub since: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Usage {
+    pub today_usd: f64,
+    pub total_usd: f64,
+    pub runs_today: u32,
+    pub runs: u32,
+}
+
 /// The prompt a blocked task waits on.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -109,6 +131,9 @@ impl Query for GetRunLog {
 }
 impl Query for GetTaskDiff {
     type Output = String;
+}
+impl Query for GetUsage {
+    type Output = Usage;
 }
 impl Query for GetCoordination {
     type Output = Vec<TaskCoordination>;
@@ -257,6 +282,27 @@ impl QueryHandler<GetCoordination> for TaskQueries {
                 overlaps,
             })
             .collect())
+    }
+}
+
+impl QueryHandler<GetUsage> for TaskQueries {
+    fn handle(&self, q: GetUsage) -> Result<Usage> {
+        let mut usage = Usage::default();
+        for task in self.tasks.list()? {
+            if q.project_id.as_ref().is_some_and(|p| &task.project_id != p) {
+                continue;
+            }
+            for run in self.tasks.runs(&task.id)? {
+                let cost = run.cost_usd.unwrap_or(0.0);
+                usage.runs += 1;
+                usage.total_usd += cost;
+                if run.started_at >= q.since {
+                    usage.runs_today += 1;
+                    usage.today_usd += cost;
+                }
+            }
+        }
+        Ok(usage)
     }
 }
 

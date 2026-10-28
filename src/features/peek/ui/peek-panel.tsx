@@ -40,7 +40,7 @@ export function EditorSettings() {
           <code>{"{file}"}</code> and <code>{"{line}"}</code> are filled in. Terminal editors (nvim, vim, hx) open in an
           agent tab; GUI editors (code, cursor, zed) open in their own window.
         </p>
-        <Button size="sm" className="w-full" disabled={update.isPending} onClick={() => update.mutate({ editorCommand: command })}>
+        <Button size="sm" className="w-full" disabled={!data || update.isPending} onClick={() => data && update.mutate({ ...data, editorCommand: command })}>
           Save
         </Button>
       </PopoverContent>

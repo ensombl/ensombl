@@ -51,10 +51,7 @@ pub fn run() {
                     Arc::new(TauriBus(app.handle().clone())),
                     Arc::new(api_bus.clone()),
                 ])),
-                CoreOptions {
-                    lead_mcp_config,
-                    ..CoreOptions::default()
-                },
+                CoreOptions { lead_mcp_config },
             )?;
             // The same API as ensombl-server, on localhost, for local tools
             // like the MCP bridge the lead agent uses.
@@ -124,6 +121,8 @@ pub fn run() {
             cmd::delete_task,
             cmd::get_coordination,
             cmd::update_task_branch,
+            cmd::get_usage,
+            cmd::stop_all_tasks,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

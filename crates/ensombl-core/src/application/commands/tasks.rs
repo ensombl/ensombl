@@ -17,12 +17,13 @@ use ts_rs::TS;
 use crate::application::cqrs::{Command, CommandHandler};
 use crate::application::ports::{
     AgentConnection, AgentLaunch, AgentRuntime, Clock, EventBus, GitWorktrees, RunLog,
-    SessionRepository, ShellEnvironment, TaskGit, TaskStore,
+    SessionRepository, SettingsRepository, ShellEnvironment, TaskGit, TaskStore,
 };
 use crate::application::{Error, Result};
 use crate::domain::agent_run::{PermissionDecision, PermissionMode, RunEvent};
 use crate::domain::orchestration::{
-    Run, RunOutcome, Task, TaskEvent, TaskId, TaskStatus, branch_name, schedule, transition,
+    Run, RunOutcome, Task, TaskEvent, TaskId, TaskStatus, branch_name, compose_prompt, schedule,
+    transition,
 };
 use crate::domain::terminal::AgentKind;
 use crate::domain::workspace::ProjectId;
@@ -118,6 +119,15 @@ pub struct UpdateTaskBranch {
     pub task_id: TaskId,
 }
 
+/// Cancels every queued or running task (of one project, or all).
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct StopAllTasks {
+    #[ts(optional)]
+    pub project_id: Option<ProjectId>,
+}
+
 /// Forgets a task, throwing away its worktree and branch.
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -153,6 +163,10 @@ impl Command for DeleteTask {
 impl Command for UpdateTaskBranch {
     type Output = ();
 }
+impl Command for StopAllTasks {
+    /// How many were stopped.
+    type Output = u32;
+}
 
 /// Everything the orchestrator talks to.
 pub struct TaskPorts {
@@ -167,8 +181,8 @@ pub struct TaskPorts {
     pub clock: Arc<dyn Clock>,
     /// Task worktrees go under `<worktrees_dir>/<project>/task-<id>`.
     pub worktrees_dir: PathBuf,
-    /// How many tasks may run at once.
-    pub concurrency: usize,
+    /// Holds how many tasks may run at once.
+    pub settings: Arc<dyn SettingsRepository>,
 }
 
 /// A run whose agent process is alive.
@@ -278,7 +292,10 @@ impl Inner {
         let ready = {
             let _guard = self.edit.lock().unwrap();
             match self.ports.tasks.list() {
-                Ok(tasks) => schedule(&tasks, self.ports.concurrency),
+                Ok(tasks) => schedule(
+                    &tasks,
+                    self.ports.settings.get().task_concurrency.max(1) as usize,
+                ),
                 Err(e) => {
                     eprintln!("dispatch: {e}");
                     return;
@@ -338,10 +355,18 @@ impl Inner {
         let program = self.ports.shell.find(program).ok_or_else(|| {
             Error::Invalid(format!("{program} isn't installed or isn't on your PATH"))
         })?;
-        let prompt = task
-            .next_prompt
-            .clone()
-            .unwrap_or_else(|| task.prompt.clone());
+        let prompt = match &task.next_prompt {
+            Some(follow_up) => follow_up.clone(),
+            None => {
+                let deps: Vec<(String, Option<String>)> = task
+                    .depends_on
+                    .iter()
+                    .filter_map(|id| self.ports.tasks.get(id).ok().flatten())
+                    .map(|d| (d.title, d.summary))
+                    .collect();
+                compose_prompt(&task.prompt, &task.base_branch, &deps)
+            }
+        };
         let resume = task.next_prompt.as_ref().and(task.session_id.clone());
 
         let task = self.apply(
@@ -697,6 +722,23 @@ impl CommandHandler<UpdateTaskBranch> for TaskCommands {
     }
 }
 
+impl CommandHandler<StopAllTasks> for TaskCommands {
+    fn handle(&self, cmd: StopAllTasks) -> Result<u32> {
+        let mut stopped = 0;
+        for task in self.inner.ports.tasks.list()? {
+            let ours = cmd
+                .project_id
+                .as_ref()
+                .is_none_or(|p| &task.project_id == p);
+            if ours && (task.status.is_active() || task.status == TaskStatus::Queued) {
+                self.handle(CancelTask { task_id: task.id })?;
+                stopped += 1;
+            }
+        }
+        Ok(stopped)
+    }
+}
+
 impl CommandHandler<DeleteTask> for TaskCommands {
     fn handle(&self, cmd: DeleteTask) -> Result<()> {
         let inner = &self.inner;
@@ -904,6 +946,19 @@ mod tests {
         }
     }
 
+    struct Limit(u32);
+    impl SettingsRepository for Limit {
+        fn get(&self) -> crate::application::ports::Settings {
+            crate::application::ports::Settings {
+                task_concurrency: self.0,
+                ..Default::default()
+            }
+        }
+        fn set(&self, _: crate::application::ports::Settings) -> Result<()> {
+            Ok(())
+        }
+    }
+
     struct Ticks(AtomicU64);
     impl Clock for Ticks {
         fn now(&self) -> u64 {
@@ -948,7 +1003,7 @@ mod tests {
                 bus: Arc::new(Bus::default()),
                 clock: Arc::new(Ticks(AtomicU64::new(1))),
                 worktrees_dir: dirs.path().join("worktrees"),
-                concurrency,
+                settings: Arc::new(Limit(concurrency as u32)),
             });
             let queries = TaskQueries::new(tasks.clone(), log, sessions, git.clone());
             Self {
@@ -1060,6 +1115,29 @@ mod tests {
             })
             .unwrap();
         assert_eq!(log.len(), 2);
+    }
+
+    #[test]
+    fn dependent_prompts_say_what_came_before() {
+        let h = Harness::new(3);
+        let parent = h.create("Add API", vec![]);
+        let child = h.create("Use API", vec![parent.id.clone()]);
+        h.finish(0, "Added /claims");
+        h.cmds.handle(ApproveTask { task_id: parent.id }).unwrap();
+        assert_eq!(h.status(&child.id), TaskStatus::Running);
+        let sent = h.runtime.lock().unwrap()[1].sent[0].clone();
+        assert!(sent.contains("- Add API: Added /claims"), "{sent}");
+        assert!(sent.ends_with("please Use API"));
+    }
+
+    #[test]
+    fn stop_all_cancels_queued_and_running_tasks() {
+        let h = Harness::new(1);
+        let a = h.create("a", vec![]);
+        let b = h.create("b", vec![]);
+        assert_eq!(h.cmds.handle(StopAllTasks { project_id: None }).unwrap(), 2);
+        assert_eq!(h.status(&a.id), TaskStatus::Cancelled);
+        assert_eq!(h.status(&b.id), TaskStatus::Cancelled);
     }
 
     #[test]
@@ -1366,7 +1444,9 @@ mod smoke {
             bus: Arc::new(Print),
             clock: Arc::new(SystemClock),
             worktrees_dir: dir.path().join("worktrees"),
-            concurrency: 1,
+            settings: Arc::new(crate::infrastructure::json_comments::JsonSettings::open(
+                dir.path().join("settings.json"),
+            )),
         });
         let task = cmds
             .handle(CreateTask {

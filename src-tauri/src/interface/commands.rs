@@ -17,7 +17,7 @@ use ensombl_core::application::commands::review::{
 };
 use ensombl_core::application::commands::tasks::{
     ApproveTask, CancelTask, CreateTask, DeleteTask, QueueTask, RespondToTask, RetryTask,
-    SendFollowUp, UpdateTaskBranch,
+    SendFollowUp, StopAllTasks, UpdateTaskBranch,
 };
 use ensombl_core::application::commands::terminals::{
     AttachTerminal, CloseTerminal, ResizeTerminal, StartTerminal, WithSink, WriteTerminal,
@@ -37,7 +37,8 @@ use ensombl_core::application::queries::review::{
     GetSettings, ListComments, ReadSource, SourceText,
 };
 use ensombl_core::application::queries::tasks::{
-    GetCoordination, GetRunLog, GetTask, GetTaskDiff, ListTasks, TaskCoordination, TaskDetail,
+    GetCoordination, GetRunLog, GetTask, GetTaskDiff, GetUsage, ListTasks, TaskCoordination,
+    TaskDetail, Usage,
 };
 use ensombl_core::application::queries::terminals::{AgentAvailability, ListAgents, ListTerminals};
 use ensombl_core::application::queries::workspaces::{
@@ -433,5 +434,18 @@ pub async fn update_task_branch(
     handlers: State<'_, Arc<Handlers>>,
     input: UpdateTaskBranch,
 ) -> Result<()> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn get_usage(handlers: State<'_, Arc<Handlers>>, input: GetUsage) -> Result<Usage> {
+    blocking(&handlers.task_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn stop_all_tasks(
+    handlers: State<'_, Arc<Handlers>>,
+    input: StopAllTasks,
+) -> Result<u32> {
     blocking(&handlers.task_commands, move |h| h.handle(input)).await
 }
