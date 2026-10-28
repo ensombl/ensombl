@@ -473,7 +473,7 @@ impl AgentRuntime for ClaudeCode {
                                 "response": {
                                     "subtype": "error",
                                     "request_id": request_id,
-                                    "error": "not supported by CRM",
+                                    "error": "not supported by ensombl",
                                 },
                             }));
                         }

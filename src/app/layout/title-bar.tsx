@@ -19,9 +19,9 @@ export function TitleBar({ version, children }: { version?: string; children?: R
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <img src={logo} alt="CRM" className="size-7 shrink-0" draggable={false} />
+          <img src={logo} alt="ensombl" className="size-7 shrink-0" draggable={false} />
         </TooltipTrigger>
-        <TooltipContent>CRM: Clanker Resource Management</TooltipContent>
+        <TooltipContent>ensombl: where clankers come together</TooltipContent>
       </Tooltip>
       {children}
       {version && (
