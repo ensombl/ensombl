@@ -656,14 +656,14 @@ impl CommandHandler<ApproveTask> for TaskCommands {
         // Other work in review on the same base catches up with this merge,
         // where it can without conflicts; the rest shows as behind.
         for other in inner.ports.tasks.list()? {
-            if other.status == TaskStatus::Review && other.base_branch == task.base_branch {
-                if let Some(worktree) = other.worktree.as_deref().filter(|w| Path::new(w).is_dir())
-                {
-                    let _ = inner
-                        .ports
-                        .task_git
-                        .update_from_base(Path::new(worktree), &other.base_branch);
-                }
+            if other.status == TaskStatus::Review
+                && other.base_branch == task.base_branch
+                && let Some(worktree) = other.worktree.as_deref().filter(|w| Path::new(w).is_dir())
+            {
+                let _ = inner
+                    .ports
+                    .task_git
+                    .update_from_base(Path::new(worktree), &other.base_branch);
             }
         }
         // Tasks waiting on this one can start now.
