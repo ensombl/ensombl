@@ -47,6 +47,22 @@ pub trait GitWorktrees: Send + Sync {
     fn remove(&self, repo: &Path, path: &Path, force: bool) -> Result<()>;
 }
 
+/// Git work on task branches.
+pub trait TaskGit: Send + Sync {
+    /// Stages and commits everything in `worktree`; `false` when there was nothing to commit.
+    fn commit_all(&self, worktree: &Path, message: &str) -> Result<bool>;
+    /// What `branch` changed since it left `base`, as a unified diff.
+    fn diff(&self, repo: &Path, base: &str, branch: &str) -> Result<String>;
+    /// Paths `branch` changed since it left `base`.
+    fn changed_files(&self, repo: &Path, base: &str, branch: &str) -> Result<Vec<String>>;
+    /// Paths that would conflict when merging `branch` into `base`.
+    fn conflicts(&self, repo: &Path, base: &str, branch: &str) -> Result<Vec<String>>;
+    /// Merges `branch` into `base` with a merge commit. Refuses on conflicts,
+    /// and when `base` is checked out with uncommitted changes.
+    fn merge(&self, repo: &Path, base: &str, branch: &str, message: &str) -> Result<()>;
+    fn delete_branch(&self, repo: &Path, branch: &str) -> Result<()>;
+}
+
 /// Persistence for the tab session. `update` must be atomic.
 pub trait SessionRepository: Send + Sync {
     fn get(&self) -> Result<Session>;
