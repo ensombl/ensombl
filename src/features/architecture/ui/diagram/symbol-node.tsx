@@ -20,7 +20,7 @@ function SymbolNodeView({ data, selected }: NodeProps<SymbolFlowNode>) {
     <div
       title={`${symbol.signature}\n${symbol.file}:${symbol.range.startLine}`}
       className={cn(
-        "relative flex h-full w-full items-center gap-2 rounded-lg border border-l-[3px] bg-card px-2.5 text-card-foreground shadow-sm transition-colors hover:bg-accent/40",
+        "relative flex h-full w-full items-center gap-2 rounded-lg border border-l-[3px] bg-card px-2.5 text-card-foreground hover:bg-accent/40",
         symbol.kind === "interface" && "border-dashed",
         selected && "ring-2 ring-ring",
         data.role && "ring-2 ring-violet-400/70",

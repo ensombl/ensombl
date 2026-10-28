@@ -31,7 +31,7 @@ export const ComponentNodeView = memo(function ComponentNodeView({ data, selecte
   return (
     <div
       className={cn(
-        "relative flex h-full w-full flex-col justify-center gap-0.5 rounded-lg border bg-card px-2.5 text-card-foreground shadow-xs transition-opacity",
+        "relative flex h-full w-full flex-col justify-center gap-0.5 rounded-lg border bg-card px-2.5 text-card-foreground",
         special && "rounded-full px-4",
         node.kind === "channel" && "border-dashed",
         selected && "ring-2 ring-ring",
@@ -84,7 +84,7 @@ export const FeatureNodeView = memo(function FeatureNodeView({ data, selected }:
   return (
     <div
       className={cn(
-        "relative flex h-full w-full flex-col justify-center gap-1 rounded-xl border-2 bg-card px-3 shadow-xs",
+        "relative flex h-full w-full flex-col justify-center gap-1 rounded-xl border-2 bg-card px-3",
         selected && "ring-2 ring-ring",
         data.dimmed && "opacity-25",
       )}

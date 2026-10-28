@@ -30,6 +30,7 @@ import { ComponentsToolbar } from "./components-toolbar"
 import { SystemEdgeView, type SystemFlowEdge } from "./system-edge"
 import { ComponentNodeView, FeatureNodeView, LaneNodeView, type ComponentFlowNode, type FeatureFlowNode, type LaneFlowNode } from "./system-nodes"
 import { SystemMarkers } from "./system-style"
+import { sideHandles } from "../../layout/handles"
 
 const nodeTypes = { component: ComponentNodeView, feature: FeatureNodeView, lane: LaneNodeView }
 const edgeTypes = { system: SystemEdgeView }
@@ -37,7 +38,7 @@ const edgeTypes = { system: SystemEdgeView }
 /** Edge labels are drawn for every edge only when the view is this small. */
 const LABEL_ALL_EDGES = 40
 /** Viewport culling kicks in above this many nodes. */
-const CULL_ABOVE = 400
+const CULL_ABOVE = 150
 
 interface CanvasProps {
   system: SystemView
@@ -133,6 +134,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
         position: { x: box.x, y: box.y },
         width: box.width,
         height: box.height,
+        handles: sideHandles(box.width, box.height),
         selected: n.id === selected || multi.includes(n.id),
       }
       const dimmed = !!neighbors && !neighbors.has(n.id)

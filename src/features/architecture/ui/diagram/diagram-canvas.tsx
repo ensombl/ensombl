@@ -16,6 +16,7 @@ import type { ArchModel } from "@/shared/bindings/ArchModel"
 import { useIsActiveWorkspace } from "@/shared/workspace/workspace-context"
 
 import { flattenLayout, layoutSignature, toElkGraph, type Layout } from "../../layout/elk-graph"
+import { verticalHandles } from "../../layout/handles"
 import { runLayout } from "../../layout/run-layout"
 import { useChanges } from "../../model/changes-store"
 import { useDiagram } from "../../model/diagram-store"
@@ -33,6 +34,7 @@ import { UmlEdgeComponent, UmlMarkers, type UmlFlowEdge } from "./uml-edge"
 
 const nodeTypes = { symbol: SymbolNodeComponent, group: GroupNodeComponent }
 const edgeTypes = { uml: UmlEdgeComponent }
+const MINIMAP_MAX_NODES = 300
 
 function Canvas({ model }: { model: ArchModel }) {
   const diagram = useDiagram()
@@ -103,6 +105,7 @@ function Canvas({ model }: { model: ArchModel }) {
         position: { x: box.x, y: box.y },
         width: box.width,
         height: box.height,
+        handles: verticalHandles(box.width, box.height),
         parentId: n.parent && boxes.has(n.parent) ? n.parent : undefined,
         selected: n.id === selected,
       }
@@ -244,19 +247,22 @@ function Canvas({ model }: { model: ArchModel }) {
               onTogglePatterns={diagram.togglePatterns}
             />
           </Panel>
-          <Controls showInteractive={false} position="bottom-left" />
-          <MiniMap
-            pannable
-            zoomable
-            position="bottom-right"
-            nodeStrokeWidth={0}
-            nodeColor={(node) => packageColor((node.data as { pkg?: string }).pkg).value}
-          />
+          {!selectedSymbol && <Controls showInteractive={false} position="bottom-left" />}
+          {/* The minimap redraws on every pan; past a few hundred nodes it costs more than it helps. */}
+          {nodes.length <= MINIMAP_MAX_NODES && !selectedSymbol && (
+            <MiniMap
+              pannable
+              zoomable
+              position="bottom-right"
+              nodeStrokeWidth={0}
+              nodeColor={(node) => packageColor((node.data as { pkg?: string }).pkg).value}
+            />
+          )}
         </ReactFlow>
+        {selectedSymbol && (
+          <SymbolInspector model={model} symbol={selectedSymbol} onNavigate={reveal} onClose={() => select(null)} />
+        )}
       </div>
-      {selectedSymbol && (
-        <SymbolInspector model={model} symbol={selectedSymbol} onNavigate={reveal} onClose={() => select(null)} />
-      )}
       <SymbolSearch model={model} open={searchOpen} onOpenChange={setSearchOpen} onSelect={reveal} listen={active} />
     </div>
   )

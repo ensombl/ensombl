@@ -36,30 +36,30 @@ export function ComponentsToolbar({ model, view, onSearch }: ComponentsToolbarPr
   const components = model.nodes.filter((n) => n.kind === "component").length
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background/90 p-1.5 shadow-sm backdrop-blur">
+    <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border bg-background p-1 shadow-sm">
       {focus !== null && (
-        <Button variant="ghost" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={() => ui.focus(null)}>
+        <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-xs" onClick={() => ui.focus(null)}>
           <ChevronLeft /> All features
         </Button>
       )}
-      <span className="px-1 text-sm font-medium">
+      <span
+        className="max-w-48 shrink-0 truncate px-1.5 text-sm font-medium"
+        title={view.overview ? "Double-click a feature to open it" : undefined}
+      >
         {focused ? focused.split("/").pop() : view.overview ? "Features" : "All components"}
       </span>
-      {view.overview && (
-        <span className="text-xs text-muted-foreground">Double-click a feature to open it</span>
-      )}
-      <Button variant="outline" size="sm" className="h-8 gap-2 text-muted-foreground" onClick={onSearch}>
+      <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 text-xs text-muted-foreground" onClick={onSearch}>
         <Search /> Find
         <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">⌘K</kbd>
       </Button>
       {focus !== "all" && (
-        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => ui.focus("all")} title={`${components} components`}>
-          <LayoutGrid /> Show everything
+        <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 text-xs" onClick={() => ui.focus("all")} title={`Show all ${components} components`}>
+          <LayoutGrid /> All
         </Button>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+          <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 text-xs">
             <SlidersHorizontal /> View
           </Button>
         </DropdownMenuTrigger>
