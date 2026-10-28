@@ -144,7 +144,7 @@ function describeTag(model: ArchModel | null, tag: PromptTag, { patterns = [], s
 export function buildPrompt(text: string, tags: PromptTag[], model: ArchModel | null, context: TagContext = {}): string {
   const blocks = tags.map((t) => describeTag(model, t, context)).filter((b): b is string => b !== null)
   if (blocks.length === 0) return text.trim()
-  return `${text.trim()}\n\n<architecture-context source="ensombl">\n${blocks.join("\n\n")}\n</architecture-context>`
+  return `${text.trim()}\n\n<architecture-context source="Ensombl">\n${blocks.join("\n\n")}\n</architecture-context>`
 }
 
 /** Wraps text in bracketed-paste markers so multi-line prompts don't submit early. */
