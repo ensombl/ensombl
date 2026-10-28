@@ -27,7 +27,7 @@ export function NewTabMenu({ projects }: { projects: Project[] }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-7 shrink-0" aria-label="New tab">
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" aria-label="New tab">
           <Plus />
         </Button>
       </DropdownMenuTrigger>
