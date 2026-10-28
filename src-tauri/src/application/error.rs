@@ -1,11 +1,19 @@
 use serde::Serialize;
 
+use crate::domain::workspace::SessionError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Session(#[from] SessionError),
+    #[error("git: {0}")]
+    Git(String),
     #[error("{0}")]
-    Msg(String),
+    Invalid(String),
+    #[error("{0}")]
+    Storage(String),
 }
 
 impl Serialize for Error {

@@ -4,6 +4,10 @@ CRM is an architecture-first desktop editor for coding agents (clankers). It kee
 
 You need no API keys: CRM runs the real agent CLIs in an embedded terminal, so they use your existing logins.
 
+## Projects, worktrees and tabs
+
+A **project** is a git repository, and every **tab** is one of its **git worktrees**. Tabs are grouped by project in the title bar, like browser tab groups. Each worktree is an isolated workspace with its own UML index, agent terminals and file watcher, so several agents can work in parallel on separate branches. New worktrees are created under `~/.crm/worktrees/<project>/<branch>`.
+
 ## Stack
 
 - **Tauri 2**: Rust backend (indexing, PTYs, file watching) with a React + TypeScript frontend

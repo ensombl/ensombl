@@ -1,54 +1,37 @@
-import { Bot, FolderOpen, Network, Plus } from "lucide-react"
-
-import { Button } from "@/components/ui/button"
+import { Toaster } from "@/components/ui/sonner"
 import { useAppInfo } from "@/features/app-info/queries/get-app-info"
-import { usePeekStore } from "@/features/peek/model/peek-store"
-import { PeekPanel } from "@/features/peek/ui/peek-panel"
-import { Pane, PaneEmpty } from "@/shared/ui/pane"
+import { useSession } from "@/features/workspaces/queries/workspace-queries"
+import { TabStrip } from "@/features/workspaces/ui/tab-strip"
+import { cn } from "@/lib/utils"
+import { WorkspaceProvider } from "@/shared/workspace/workspace-context"
 
-import { AppShell } from "./layout/app-shell"
 import { TitleBar } from "./layout/title-bar"
+import { Welcome } from "./workspace/welcome"
+import { WorkspaceView } from "./workspace/workspace-view"
 
 export function App() {
   const { data: info } = useAppInfo()
-  const peekTarget = usePeekStore((s) => s.target)
+  const { data: session } = useSession()
+  const tabs = session?.groups.flatMap((g) => g.tabs) ?? []
 
   return (
     <div className="flex h-full flex-col">
-      <TitleBar version={info?.version} />
-      <AppShell
-        diagram={
-          <Pane title="Architecture" icon={<Network />}>
-            <PaneEmpty
-              icon={<Network />}
-              title="No repository open"
-              description="Open a TypeScript or JavaScript repository to see its whole architecture as UML."
-            >
-              <Button size="sm">
-                <FolderOpen /> Open repository
-              </Button>
-            </PaneEmpty>
-          </Pane>
-        }
-        peek={peekTarget && <PeekPanel target={peekTarget} />}
-        agents={
-          <Pane
-            title="Agents"
-            icon={<Bot />}
-            actions={
-              <Button variant="ghost" size="icon" className="size-7">
-                <Plus />
-              </Button>
-            }
+      <TitleBar version={info?.version}>{session && <TabStrip session={session} />}</TitleBar>
+      <main className="relative min-h-0 flex-1">
+        {session && tabs.length === 0 && <Welcome />}
+        {/* Every open tab stays mounted so its terminals and diagram survive tab switches. */}
+        {tabs.map(({ worktree }) => (
+          <div
+            key={worktree.id}
+            className={cn("absolute inset-0 flex", worktree.id !== session?.active && "invisible")}
           >
-            <PaneEmpty
-              icon={<Bot />}
-              title="No agent running"
-              description="Start claude, codex or a custom CLI. It uses your existing login."
-            />
-          </Pane>
-        }
-      />
+            <WorkspaceProvider worktree={worktree}>
+              <WorkspaceView />
+            </WorkspaceProvider>
+          </div>
+        ))}
+      </main>
+      <Toaster position="bottom-right" />
     </div>
   )
 }
