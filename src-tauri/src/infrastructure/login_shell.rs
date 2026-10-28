@@ -11,6 +11,15 @@ use crate::application::ports::ShellEnvironment;
 
 const MARKER: &str = "__CRM_PATH__";
 
+/// Set by a parent Claude Code session (e.g. when CRM itself was launched from
+/// one); inherited, they make agents think they're nested and change behavior.
+fn is_agent_session_marker(key: &str) -> bool {
+    key == "CLAUDECODE"
+        || key == "CLAUDE_PID"
+        || key == "CLAUDE_EFFORT"
+        || key.starts_with("CLAUDE_CODE_")
+}
+
 pub struct LoginShell {
     shell: PathBuf,
     path: String,
@@ -82,7 +91,10 @@ impl ShellEnvironment for LoginShell {
 
     fn env(&self) -> Vec<(String, String)> {
         let mut env: Vec<(String, String)> = std::env::vars()
-            .filter(|(k, _)| !matches!(k.as_str(), "PATH" | "TERM" | "COLORTERM" | "TERM_PROGRAM"))
+            .filter(|(k, _)| {
+                !matches!(k.as_str(), "PATH" | "TERM" | "COLORTERM" | "TERM_PROGRAM")
+                    && !is_agent_session_marker(k)
+            })
             .collect();
         env.push(("PATH".into(), self.path.clone()));
         env.push(("TERM".into(), "xterm-256color".into()));
@@ -117,5 +129,13 @@ mod tests {
         };
         assert_eq!(get("PATH"), Some("/x"));
         assert_eq!(get("TERM"), Some("xterm-256color"));
+    }
+
+    #[test]
+    fn parent_agent_markers_are_not_inherited() {
+        assert!(is_agent_session_marker("CLAUDE_CODE_CHILD_SESSION"));
+        assert!(is_agent_session_marker("CLAUDECODE"));
+        assert!(!is_agent_session_marker("CLAUDE_CONFIG_DIR"));
+        assert!(!is_agent_session_marker("HOME"));
     }
 }

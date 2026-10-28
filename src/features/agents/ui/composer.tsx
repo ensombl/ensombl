@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
-import { AtSign, CornerDownLeft, FileCode2, Shapes, X } from "lucide-react"
+import { ArrowUp, AtSign, FileCode2, Shapes, Square, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,17 +8,21 @@ import { KindBadge } from "@/features/architecture/ui/kind-badge"
 import { cn } from "@/lib/utils"
 import type { ArchModel } from "@/shared/bindings/ArchModel"
 import type { PatternInstance } from "@/shared/bindings/PatternInstance"
-import type { TerminalInfo } from "@/shared/bindings/TerminalInfo"
 import { tagKey, usePromptTags } from "@/shared/workspace/prompt-tags"
 
-import { writeTerminal } from "../commands/terminal-commands"
-import { bracketedPaste, buildPrompt } from "../model/context"
+import { buildPrompt } from "../model/context"
 import { matchSuggestions, mentionAt, taggables, type Suggestion } from "../model/suggestions"
 
 interface ComposerProps {
   model: ArchModel | null
   patterns: PatternInstance[]
-  target: TerminalInfo | undefined
+  /** Receives the prompt with tag context expanded. */
+  onSend: (prompt: string) => Promise<unknown> | void
+  placeholder: string
+  disabled?: boolean
+  /** A turn is running; shows a stop button. */
+  busy?: boolean
+  onStop?: () => void
 }
 
 function SuggestionIcon({ s }: { s: Suggestion }) {
@@ -29,7 +33,7 @@ function SuggestionIcon({ s }: { s: Suggestion }) {
 }
 
 /** Prompt box for the active agent with `@` tagging of classes, members and files. */
-export function Composer({ model, patterns, target }: ComposerProps) {
+export function Composer({ model, patterns, onSend, placeholder, disabled, busy, onStop }: ComposerProps) {
   const { tags, add, remove, clear, draft, takeDraft } = usePromptTags()
   const [text, setText] = useState("")
 
@@ -52,7 +56,7 @@ export function Composer({ model, patterns, target }: ComposerProps) {
   const mention = mentionAt(text, caret)
   const suggestions = useMemo(() => (mention ? matchSuggestions(all, mention.query) : []), [all, mention?.query]) // eslint-disable-line react-hooks/exhaustive-deps
   const open = mention !== null && suggestions.length > 0
-  const canSend = !!target?.running && (text.trim().length > 0 || tags.length > 0)
+  const canSend = !disabled && (text.trim().length > 0 || tags.length > 0)
 
   const choose = (s: Suggestion) => {
     if (!mention) return
@@ -70,11 +74,12 @@ export function Composer({ model, patterns, target }: ComposerProps) {
   }
 
   const send = async () => {
-    if (!target || !canSend) return
-    const prompt = buildPrompt(text, tags, model, patterns)
-    await writeTerminal(target.id, bracketedPaste(prompt))
-    // Give the TUI a beat to take the paste before submitting it.
-    setTimeout(() => void writeTerminal(target.id, "\r"), 60)
+    if (!canSend) return
+    try {
+      await onSend(buildPrompt(text, tags, model, patterns))
+    } catch {
+      return // keep the draft so nothing is lost
+    }
     setText("")
     setCaret(0)
     clear()
@@ -98,6 +103,11 @@ export function Composer({ model, patterns, target }: ComposerProps) {
         setCaret(-1)
         return
       }
+    }
+    if (e.key === "Escape" && busy && onStop) {
+      e.preventDefault()
+      onStop()
+      return
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -147,8 +157,8 @@ export function Composer({ model, patterns, target }: ComposerProps) {
           ref={input}
           value={text}
           rows={2}
-          placeholder={target ? `Message ${target.title}… use @ to tag a class, method or file` : "Start an agent to send prompts"}
-          disabled={!target}
+          placeholder={placeholder}
+          disabled={disabled}
           onChange={(e) => {
             setText(e.target.value)
             setCaret(e.target.selectionStart)
@@ -156,17 +166,18 @@ export function Composer({ model, patterns, target }: ComposerProps) {
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
           onKeyDown={onKeyDown}
-          className="max-h-40 min-h-16 resize-none pr-12 text-sm"
+          className={cn("max-h-40 min-h-16 resize-none text-sm", busy && onStop ? "pr-20" : "pr-12")}
         />
-        <Button
-          size="icon"
-          className="absolute right-2 bottom-2 size-7"
-          disabled={!canSend}
-          onClick={() => void send()}
-          aria-label="Send to agent"
-        >
-          <CornerDownLeft />
-        </Button>
+        <div className="absolute right-2 bottom-2 flex gap-1">
+          {busy && onStop && (
+            <Button size="icon" variant="secondary" className="size-7" onClick={onStop} aria-label="Stop (Esc)" title="Stop (Esc)">
+              <Square className="fill-current" />
+            </Button>
+          )}
+          <Button size="icon" className="size-7 rounded-full" disabled={!canSend} onClick={() => void send()} aria-label="Send to agent">
+            <ArrowUp />
+          </Button>
+        </div>
       </div>
     </div>
   )

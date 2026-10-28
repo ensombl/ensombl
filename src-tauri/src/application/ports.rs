@@ -203,3 +203,49 @@ pub trait SettingsRepository: Send + Sync {
 pub trait DetachedLauncher: Send + Sync {
     fn launch(&self, command_line: &str, cwd: &Path, env: &[(String, String)]) -> Result<()>;
 }
+
+// Native chats
+
+/// What a chat runtime should start.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AgentLaunch {
+    pub program: PathBuf,
+    pub args: Vec<String>,
+    pub cwd: PathBuf,
+    pub env: Vec<(String, String)>,
+    /// Continue an earlier session.
+    pub resume: Option<String>,
+    pub model: Option<String>,
+    pub permission_mode: crate::domain::chat::PermissionMode,
+}
+
+/// Receives a chat's events from the runtime's reader thread. The last one is `Exited`.
+pub type ChatEventHandler = Box<dyn Fn(crate::domain::chat::ChatEvent) + Send + Sync>;
+
+/// A running agent session driven through its structured protocol.
+pub trait AgentConnection: Send + Sync {
+    fn send(&self, text: &str) -> Result<()>;
+    fn respond(
+        &self,
+        request_id: &str,
+        decision: &crate::domain::chat::PermissionDecision,
+    ) -> Result<()>;
+    fn interrupt(&self) -> Result<()>;
+    fn set_permission_mode(&self, mode: crate::domain::chat::PermissionMode) -> Result<()>;
+    fn set_model(&self, model: &str) -> Result<()>;
+    fn kill(&self);
+}
+
+/// Starts agent sessions for one kind of CLI (Claude Code, Codex, ...).
+pub trait AgentRuntime: Send + Sync {
+    fn start(
+        &self,
+        launch: AgentLaunch,
+        events: ChatEventHandler,
+    ) -> Result<Box<dyn AgentConnection>>;
+}
+
+/// Where a chat's live events go; swapped when a view re-attaches.
+pub trait ChatSink: Send + Sync {
+    fn event(&self, event: &crate::domain::chat::ChatEvent);
+}

@@ -6,6 +6,10 @@ use std::sync::Arc;
 use tauri::State;
 use tauri::ipc::{Channel, InvokeResponseBody};
 
+use crate::application::commands::chats::{
+    AttachChat, ChatSnapshot, CloseChat, InterruptChat, RespondPermission, SendChatMessage,
+    SetChatModel, SetChatPermissionMode, StartChat, WithChatSink,
+};
 use crate::application::commands::indexing::{DropIndex, IndexSummary, IndexWorktree};
 use crate::application::commands::patterns::SetPatternDecision;
 use crate::application::commands::review::{
@@ -20,6 +24,7 @@ use crate::application::commands::workspaces::{
 };
 use crate::application::cqrs::{CommandHandler, QueryHandler};
 use crate::application::ports::Settings;
+use crate::application::queries::chats::ListChats;
 use crate::application::queries::get_app_info::{AppInfo, GetAppInfo};
 use crate::application::queries::model::GetModel;
 use crate::application::queries::patterns::{GetPatterns, PatternView};
@@ -29,11 +34,13 @@ use crate::application::queries::workspaces::{
     GetSession, ListBranches, ListWorktrees, SessionView, WorktreeListing,
 };
 use crate::application::{Error, Result};
+use crate::domain::chat::{ChatEvent, ChatInfo};
 use crate::domain::model::ArchModel;
 use crate::domain::review::{AnchoredComment, ReviewComment};
 use crate::domain::terminal::TerminalInfo;
 use crate::domain::workspace::WorktreeId;
 
+use super::chat_sink::ChatChannelSink;
 use super::state::Handlers;
 use super::terminal_sink::ChannelSink;
 
@@ -265,4 +272,73 @@ pub fn toggle_group(handlers: State<'_, Handlers>, input: ToggleGroup) -> Result
 #[tauri::command]
 pub fn remove_project(handlers: State<'_, Handlers>, input: RemoveProject) -> Result<()> {
     handlers.workspace_commands.handle(input)
+}
+
+// Chats
+
+#[tauri::command]
+pub fn list_chats(handlers: State<'_, Handlers>, input: ListChats) -> Result<Vec<ChatInfo>> {
+    handlers.chat_queries.handle(input)
+}
+
+#[tauri::command]
+pub async fn start_chat(
+    handlers: State<'_, Handlers>,
+    input: StartChat,
+    output: Channel<ChatEvent>,
+) -> Result<ChatInfo> {
+    let sink = Arc::new(ChatChannelSink(output));
+    blocking(&handlers.chat_commands, move |h| {
+        h.handle(WithChatSink {
+            command: input,
+            sink,
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub fn attach_chat(
+    handlers: State<'_, Handlers>,
+    input: AttachChat,
+    output: Channel<ChatEvent>,
+) -> Result<ChatSnapshot> {
+    let sink = Arc::new(ChatChannelSink(output));
+    handlers.chat_commands.handle(WithChatSink {
+        command: input,
+        sink,
+    })
+}
+
+#[tauri::command]
+pub fn send_chat_message(handlers: State<'_, Handlers>, input: SendChatMessage) -> Result<()> {
+    handlers.chat_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn respond_permission(handlers: State<'_, Handlers>, input: RespondPermission) -> Result<()> {
+    handlers.chat_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn interrupt_chat(handlers: State<'_, Handlers>, input: InterruptChat) -> Result<()> {
+    handlers.chat_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn set_chat_permission_mode(
+    handlers: State<'_, Handlers>,
+    input: SetChatPermissionMode,
+) -> Result<()> {
+    handlers.chat_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn set_chat_model(handlers: State<'_, Handlers>, input: SetChatModel) -> Result<()> {
+    handlers.chat_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn close_chat(handlers: State<'_, Handlers>, input: CloseChat) -> Result<()> {
+    handlers.chat_commands.handle(input)
 }
