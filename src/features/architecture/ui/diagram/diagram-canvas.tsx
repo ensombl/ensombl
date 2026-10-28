@@ -19,6 +19,7 @@ import { flattenLayout, layoutSignature, toElkGraph, type Layout } from "../../l
 import { runLayout } from "../../layout/run-layout"
 import { useChanges } from "../../model/changes-store"
 import { useDiagram } from "../../model/diagram-store"
+import { useSystemUi } from "../../model/system-store"
 import { packageColor } from "../../model/package-colors"
 import { ancestorsOf, buildHierarchy, buildView, defaultExpanded, expandOneLevel } from "../../model/view"
 import { PatternsPanel } from "@/features/patterns/ui/patterns-panel"
@@ -36,7 +37,10 @@ const edgeTypes = { uml: UmlEdgeComponent }
 function Canvas({ model }: { model: ArchModel }) {
   const diagram = useDiagram()
   const { state, init, clearFocus, select } = diagram
-  const active = useIsActiveWorkspace()
+  const workspaceActive = useIsActiveWorkspace()
+  const tab = useSystemUi().state.tab
+  // ⌘K belongs to whichever lens is showing.
+  const active = workspaceActive && tab === "code"
   const flow = useReactFlow()
   const [layout, setLayout] = useState<{ layout: Layout; routed: Set<string> } | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)

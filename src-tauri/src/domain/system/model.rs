@@ -68,6 +68,12 @@ pub struct SystemNode {
     pub line: Option<u32>,
     /// Written by the user (from `.crm/architecture.json`).
     pub description: Option<String>,
+    /// Hidden by the user; kept so it can be shown again.
+    #[serde(default)]
+    pub hidden: bool,
+    /// Ids of the detected components merged into this one.
+    #[serde(default)]
+    pub merged: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]

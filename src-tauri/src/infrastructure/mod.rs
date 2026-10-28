@@ -4,6 +4,7 @@ pub mod build_info;
 pub mod claude_stream;
 pub mod fs_scanner;
 pub mod git_cli;
+pub mod json_architecture;
 pub mod json_comments;
 pub mod json_decisions;
 pub mod json_sessions;

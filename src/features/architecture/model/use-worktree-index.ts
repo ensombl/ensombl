@@ -10,6 +10,7 @@ import { dropIndex, useIndexWorktree } from "../commands/indexing-commands"
 import { applyDelta } from "./apply-delta"
 import { useChangesStore } from "./changes-store"
 import { modelKeys, useModel } from "../queries/model-queries"
+import { systemKeys } from "../queries/system-queries"
 
 /**
  * Keeps a worktree indexed while its tab is mounted: indexes on mount, follows
@@ -37,6 +38,8 @@ export function useWorktreeIndex(worktreeId: string) {
   const markChanged = useChangesStore((s) => s.mark)
   useBackendEvent<ModelUpdated>("index://updated", (u) => {
     if (u.worktreeId !== worktreeId) return
+    // The system view is derived on the backend; just refetch it.
+    client.invalidateQueries({ queryKey: systemKeys.system(worktreeId) })
     const key = modelKeys.model(worktreeId)
     const current = client.getQueryData<ArchModel | null>(key)
     if (!u.delta || !current) {

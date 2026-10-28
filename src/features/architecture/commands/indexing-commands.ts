@@ -7,6 +7,7 @@ import type { IndexWorktree } from "@/shared/bindings/IndexWorktree"
 import { command } from "@/shared/ipc/client"
 
 import { modelKeys } from "../queries/model-queries"
+import { systemKeys } from "../queries/system-queries"
 
 export const indexWorktree = (input: IndexWorktree) => command<IndexSummary>("index_worktree", { input })
 export const dropIndex = (input: DropIndex) => command("drop_index", { input })
@@ -15,7 +16,10 @@ export function useIndexWorktree() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: indexWorktree,
-    onSuccess: (_, input) => client.invalidateQueries({ queryKey: modelKeys.model(input.worktreeId) }),
+    onSuccess: (_, input) => {
+      client.invalidateQueries({ queryKey: modelKeys.model(input.worktreeId) })
+      client.invalidateQueries({ queryKey: systemKeys.system(input.worktreeId) })
+    },
     onError: (error) => toast.error("Indexing failed", { description: String(error) }),
   })
 }
