@@ -10,8 +10,8 @@
     "tauri": "tauri",
     "lint": "eslint . && tsc --noEmit",
     "test": "vitest run",
-    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "bindings": "cargo test --manifest-path src-tauri/Cargo.toml export_bindings"
+    "test:rust": "cargo test --workspace",
+    "bindings": "cargo test -p ensombl-core export_bindings"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

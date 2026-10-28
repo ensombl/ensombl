@@ -1,49 +1,14 @@
-pub mod application;
-pub mod domain;
-pub mod infrastructure;
 pub mod interface;
 
-use std::sync::{Arc, mpsc};
+use std::sync::Arc;
 
+use ensombl_core::app::{AppPaths, Core};
 use tauri::Manager;
 
-use application::commands::architecture::ArchitectureCommands;
-use application::commands::indexing::{IndexingCommands, IndexingPorts, ReindexPaths};
-use application::commands::patterns::PatternCommands;
-use application::commands::review::ReviewCommands;
-use application::commands::terminals::{TerminalCommands, TerminalRegistry};
-use application::commands::workspaces::WorkspaceCommands;
-use application::cqrs::CommandHandler;
-use application::index_registry::IndexRegistry;
-use application::ports::{ShellEnvironment, SourceScanner};
-use application::queries::architecture::ArchitectureQueries;
-use application::queries::files::FileQueries;
-use application::queries::get_app_info::GetAppInfoHandler;
-use application::queries::model::ModelQueries;
-use application::queries::patterns::PatternQueries;
-use application::queries::review::ReviewQueries;
-use application::queries::terminals::TerminalQueries;
-use application::queries::workspaces::WorkspaceQueries;
-use domain::terminal::AgentProfile;
-use infrastructure::build_info::CargoBuildInfo;
-use infrastructure::fs_scanner::FsScanner;
-use infrastructure::git_cli::GitCli;
-use infrastructure::json_architecture::JsonArchitecture;
-use infrastructure::json_comments::{JsonComments, JsonSettings};
-use infrastructure::json_decisions::JsonDecisions;
-use infrastructure::json_sessions::JsonSessions;
-use infrastructure::login_shell::LoginShell;
-use infrastructure::native_pty::NativePty;
-use infrastructure::notify_watcher::{ChangeBatch, NotifyWatcher};
-use infrastructure::shell_launcher::ShellLauncher;
-use infrastructure::sqlite_cache::SqliteCache;
-use infrastructure::ts_parser::TreeSitterParser;
-use infrastructure::ts_resolver::TsResolverFactory;
 use interface::commands as cmd;
-use interface::events::TauriEvents;
-use interface::state::Handlers;
+use interface::events::TauriBus;
 
-/// Composition root: wire adapters into handlers and expose them to Tauri.
+/// Wires the core up inside Tauri: paths from the OS, events to the webview.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -51,103 +16,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let paths = app.path();
-            let data_dir = paths.app_data_dir()?;
-            let sessions = Arc::new(JsonSessions::open(data_dir.join("session.json")));
-            let worktrees_dir = paths.home_dir()?.join(".crm").join("worktrees");
-            let git = Arc::new(GitCli);
-
-            let scanner = Arc::new(FsScanner);
-            let (changes_tx, changes_rx) = mpsc::channel::<ChangeBatch>();
-            let is_source = {
-                let scanner = scanner.clone();
-                Arc::new(move |p: &str| scanner.is_source(p))
-            };
-            let registry = Arc::new(IndexRegistry::default());
-            let indexing = Arc::new(IndexingCommands::new(
-                IndexingPorts {
-                    sessions: sessions.clone(),
-                    scanner,
-                    parser: Arc::new(TreeSitterParser),
-                    resolvers: Arc::new(TsResolverFactory),
-                    cache: Arc::new(SqliteCache::open(&data_dir.join("index.db"))?),
-                    watcher: Arc::new(NotifyWatcher::new(changes_tx, is_source)),
-                    events: Arc::new(TauriEvents(app.handle().clone())),
+            let core = Core::build(
+                AppPaths {
+                    data_dir: paths.app_data_dir()?,
+                    worktrees_dir: paths.home_dir()?.join(".crm").join("worktrees"),
                 },
-                registry.clone(),
-            ));
-
-            // File changes from watchers become ReindexPaths commands.
-            let reindex = indexing.clone();
-            std::thread::spawn(move || {
-                for (worktree_id, paths) in changes_rx {
-                    if let Err(e) = reindex.handle(ReindexPaths { worktree_id, paths }) {
-                        eprintln!("reindex failed: {e}");
-                    }
-                }
-            });
-
-            let decisions = Arc::new(JsonDecisions::open(data_dir.join("patterns.json")));
-            let shell = Arc::new(LoginShell::detect());
-            let terminals = Arc::new(TerminalRegistry::default());
-            let profiles = AgentProfile::builtin();
-
-            let terminal_commands = Arc::new(TerminalCommands::new(
-                sessions.clone(),
-                shell.clone(),
-                Arc::new(NativePty),
-                terminals.clone(),
-                profiles.clone(),
-            ));
-            let comments = Arc::new(JsonComments::open(data_dir.join("comments.json")));
-            let settings = Arc::new(JsonSettings::open(data_dir.join("settings.json")));
-
-            app.manage(terminals.clone());
-            app.manage(Handlers {
-                get_app_info: GetAppInfoHandler::new(Arc::new(CargoBuildInfo)),
-                workspace_commands: Arc::new(WorkspaceCommands::new(
-                    git.clone(),
-                    sessions.clone(),
-                    worktrees_dir,
-                )),
-                workspace_queries: Arc::new(WorkspaceQueries::new(git, sessions.clone())),
-                indexing_commands: indexing,
-                model_queries: Arc::new(ModelQueries::new(registry.clone())),
-                architecture_commands: Arc::new(ArchitectureCommands::new(
-                    registry.clone(),
-                    Arc::new(JsonArchitecture),
-                )),
-                architecture_queries: Arc::new(ArchitectureQueries::new(
-                    registry.clone(),
-                    Arc::new(JsonArchitecture),
-                )),
-                pattern_commands: Arc::new(PatternCommands::new(
-                    sessions.clone(),
-                    decisions.clone(),
-                )),
-                pattern_queries: Arc::new(PatternQueries::new(
-                    sessions.clone(),
-                    registry,
-                    decisions,
-                )),
-                file_queries: Arc::new(FileQueries::new(sessions.clone(), Arc::new(FsScanner))),
-                terminal_commands: terminal_commands.clone(),
-                terminal_queries: Arc::new(TerminalQueries::new(
-                    shell.clone(),
-                    terminals,
-                    profiles,
-                )),
-                review_commands: Arc::new(ReviewCommands::new(
-                    sessions.clone(),
-                    comments.clone(),
-                    settings.clone(),
-                    shell.clone(),
-                    Arc::new(ShellLauncher {
-                        shell: shell.shell(),
-                    }),
-                    terminal_commands,
-                )),
-                review_queries: Arc::new(ReviewQueries::new(sessions, comments, settings)),
-            });
+                Arc::new(TauriBus(app.handle().clone())),
+            )?;
+            app.manage(core.handlers.clone());
+            app.manage(Arc::new(core));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -197,7 +74,7 @@ pub fn run() {
         .run(|app, event| {
             // Don't leave agent processes behind.
             if let tauri::RunEvent::Exit = event {
-                app.state::<Arc<TerminalRegistry>>().kill_all();
+                app.state::<Arc<Core>>().shutdown();
             }
         });
 }

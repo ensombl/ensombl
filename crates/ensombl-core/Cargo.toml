@@ -1,0 +1,24 @@
+[package]
+name = "ensombl-core"
+version = "0.1.0"
+description = "Ensombl's engine: indexing, architecture, terminals and agents, with no UI shell attached"
+authors = ["ensombl"]
+edition = "2024"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ts-rs = { version = "12.0.1", features = ["serde-compat", "no-serde-warnings"] }
+thiserror = "2.0.21"
+blake3 = "1.8.7"
+tree-sitter = "0.27.1"
+tree-sitter-typescript = "0.23.2"
+rayon = "1.12.0"
+ignore = "0.4.34"
+notify = "8.2.1"
+notify-debouncer-full = "0.7.0"
+rusqlite = { version = "0.41.0", features = ["bundled"] }
+portable-pty = "0.9.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"

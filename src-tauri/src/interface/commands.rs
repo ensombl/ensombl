@@ -6,43 +6,45 @@ use std::sync::Arc;
 use tauri::State;
 use tauri::ipc::{Channel, InvokeResponseBody};
 
-use crate::application::commands::architecture::{
+use ensombl_core::application::commands::architecture::{
     MergeComponents, SetRuleEnabled, SplitComponent, UpdateComponent,
 };
-use crate::application::commands::indexing::{DropIndex, IndexSummary, IndexWorktree};
-use crate::application::commands::patterns::SetPatternDecision;
-use crate::application::commands::review::{
+use ensombl_core::application::commands::indexing::{DropIndex, IndexSummary, IndexWorktree};
+use ensombl_core::application::commands::patterns::SetPatternDecision;
+use ensombl_core::application::commands::review::{
     AddComment, DeleteComment, EditorLaunch, OpenInEditor, ResolveComment, SaveSource,
     UpdateSettings,
 };
-use crate::application::commands::terminals::{
+use ensombl_core::application::commands::terminals::{
     AttachTerminal, CloseTerminal, ResizeTerminal, StartTerminal, WithSink, WriteTerminal,
 };
-use crate::application::commands::workspaces::{
+use ensombl_core::application::commands::workspaces::{
     ActivateTab, AddProject, CloseTab, CreateWorktree, OpenWorktree, RemoveProject, RemoveWorktree,
     ToggleGroup,
 };
-use crate::application::cqrs::{CommandHandler, QueryHandler};
-use crate::application::ports::Settings;
-use crate::application::queries::architecture::{GetFlow, GetSystem, SystemView};
-use crate::application::queries::files::ListFiles;
-use crate::application::queries::get_app_info::{AppInfo, GetAppInfo};
-use crate::application::queries::model::GetModel;
-use crate::application::queries::patterns::{GetPatterns, PatternView};
-use crate::application::queries::review::{GetSettings, ListComments, ReadSource, SourceText};
-use crate::application::queries::terminals::{AgentAvailability, ListAgents, ListTerminals};
-use crate::application::queries::workspaces::{
+use ensombl_core::application::cqrs::{CommandHandler, QueryHandler};
+use ensombl_core::application::ports::Settings;
+use ensombl_core::application::queries::architecture::{GetFlow, GetSystem, SystemView};
+use ensombl_core::application::queries::files::ListFiles;
+use ensombl_core::application::queries::get_app_info::{AppInfo, GetAppInfo};
+use ensombl_core::application::queries::model::GetModel;
+use ensombl_core::application::queries::patterns::{GetPatterns, PatternView};
+use ensombl_core::application::queries::review::{
+    GetSettings, ListComments, ReadSource, SourceText,
+};
+use ensombl_core::application::queries::terminals::{AgentAvailability, ListAgents, ListTerminals};
+use ensombl_core::application::queries::workspaces::{
     GetSession, ListBranches, ListWorktrees, SessionView, WorktreeListing,
 };
-use crate::application::{Error, Result};
-use crate::domain::model::ArchModel;
-use crate::domain::review::{AnchoredComment, ReviewComment};
-use crate::domain::system::flow::FlowStep;
-use crate::domain::terminal::TerminalInfo;
-use crate::domain::workspace::WorktreeId;
+use ensombl_core::application::{Error, Result};
+use ensombl_core::domain::model::ArchModel;
+use ensombl_core::domain::review::{AnchoredComment, ReviewComment};
+use ensombl_core::domain::system::flow::FlowStep;
+use ensombl_core::domain::terminal::TerminalInfo;
+use ensombl_core::domain::workspace::WorktreeId;
 
-use super::state::Handlers;
 use super::terminal_sink::ChannelSink;
+use ensombl_core::app::Handlers;
 
 async fn blocking<H, T>(
     handler: &Arc<H>,
@@ -61,18 +63,18 @@ where
 // Queries
 
 #[tauri::command]
-pub fn get_app_info(handlers: State<'_, Handlers>) -> Result<AppInfo> {
+pub fn get_app_info(handlers: State<'_, Arc<Handlers>>) -> Result<AppInfo> {
     handlers.get_app_info.handle(GetAppInfo)
 }
 
 #[tauri::command]
-pub fn get_session(handlers: State<'_, Handlers>) -> Result<SessionView> {
+pub fn get_session(handlers: State<'_, Arc<Handlers>>) -> Result<SessionView> {
     handlers.workspace_queries.handle(GetSession)
 }
 
 #[tauri::command]
 pub async fn list_worktrees(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: ListWorktrees,
 ) -> Result<Vec<WorktreeListing>> {
     blocking(&handlers.workspace_queries, move |h| h.handle(input)).await
@@ -80,25 +82,25 @@ pub async fn list_worktrees(
 
 #[tauri::command]
 pub async fn list_branches(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: ListBranches,
 ) -> Result<Vec<String>> {
     blocking(&handlers.workspace_queries, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub fn get_model(handlers: State<'_, Handlers>, input: GetModel) -> Result<Option<ArchModel>> {
+pub fn get_model(handlers: State<'_, Arc<Handlers>>, input: GetModel) -> Result<Option<ArchModel>> {
     handlers.model_queries.handle(input)
 }
 
 #[tauri::command]
-pub async fn list_agents(handlers: State<'_, Handlers>) -> Result<Vec<AgentAvailability>> {
+pub async fn list_agents(handlers: State<'_, Arc<Handlers>>) -> Result<Vec<AgentAvailability>> {
     blocking(&handlers.terminal_queries, |h| h.handle(ListAgents)).await
 }
 
 #[tauri::command]
 pub fn list_terminals(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: ListTerminals,
 ) -> Result<Vec<TerminalInfo>> {
     handlers.terminal_queries.handle(input)
@@ -106,27 +108,30 @@ pub fn list_terminals(
 
 #[tauri::command]
 pub async fn get_patterns(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: GetPatterns,
 ) -> Result<Vec<PatternView>> {
     blocking(&handlers.pattern_queries, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub async fn read_source(handlers: State<'_, Handlers>, input: ReadSource) -> Result<SourceText> {
+pub async fn read_source(
+    handlers: State<'_, Arc<Handlers>>,
+    input: ReadSource,
+) -> Result<SourceText> {
     blocking(&handlers.review_queries, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
 pub async fn list_comments(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: ListComments,
 ) -> Result<Vec<AnchoredComment>> {
     blocking(&handlers.review_queries, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub fn get_settings(handlers: State<'_, Handlers>) -> Result<Settings> {
+pub fn get_settings(handlers: State<'_, Arc<Handlers>>) -> Result<Settings> {
     handlers.review_queries.handle(GetSettings)
 }
 
@@ -134,43 +139,43 @@ pub fn get_settings(handlers: State<'_, Handlers>) -> Result<Settings> {
 
 #[tauri::command]
 pub async fn add_comment(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: AddComment,
 ) -> Result<ReviewComment> {
     blocking(&handlers.review_commands, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub fn resolve_comment(handlers: State<'_, Handlers>, input: ResolveComment) -> Result<()> {
+pub fn resolve_comment(handlers: State<'_, Arc<Handlers>>, input: ResolveComment) -> Result<()> {
     handlers.review_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn delete_comment(handlers: State<'_, Handlers>, input: DeleteComment) -> Result<()> {
+pub fn delete_comment(handlers: State<'_, Arc<Handlers>>, input: DeleteComment) -> Result<()> {
     handlers.review_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn update_settings(handlers: State<'_, Handlers>, input: UpdateSettings) -> Result<()> {
+pub fn update_settings(handlers: State<'_, Arc<Handlers>>, input: UpdateSettings) -> Result<()> {
     handlers.review_commands.handle(input)
 }
 
 #[tauri::command]
 pub async fn open_in_editor(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: OpenInEditor,
 ) -> Result<EditorLaunch> {
     blocking(&handlers.review_commands, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub async fn save_source(handlers: State<'_, Handlers>, input: SaveSource) -> Result<()> {
+pub async fn save_source(handlers: State<'_, Arc<Handlers>>, input: SaveSource) -> Result<()> {
     blocking(&handlers.review_commands, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
 pub fn set_pattern_decision(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: SetPatternDecision,
 ) -> Result<()> {
     handlers.pattern_commands.handle(input)
@@ -178,7 +183,7 @@ pub fn set_pattern_decision(
 
 #[tauri::command]
 pub async fn start_terminal(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: StartTerminal,
     output: Channel<InvokeResponseBody>,
 ) -> Result<TerminalInfo> {
@@ -194,7 +199,7 @@ pub async fn start_terminal(
 
 #[tauri::command]
 pub fn attach_terminal(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: AttachTerminal,
     output: Channel<InvokeResponseBody>,
 ) -> Result<TerminalInfo> {
@@ -206,41 +211,44 @@ pub fn attach_terminal(
 }
 
 #[tauri::command]
-pub fn write_terminal(handlers: State<'_, Handlers>, input: WriteTerminal) -> Result<()> {
+pub fn write_terminal(handlers: State<'_, Arc<Handlers>>, input: WriteTerminal) -> Result<()> {
     handlers.terminal_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn resize_terminal(handlers: State<'_, Handlers>, input: ResizeTerminal) -> Result<()> {
+pub fn resize_terminal(handlers: State<'_, Arc<Handlers>>, input: ResizeTerminal) -> Result<()> {
     handlers.terminal_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn close_terminal(handlers: State<'_, Handlers>, input: CloseTerminal) -> Result<()> {
+pub fn close_terminal(handlers: State<'_, Arc<Handlers>>, input: CloseTerminal) -> Result<()> {
     handlers.terminal_commands.handle(input)
 }
 
 #[tauri::command]
 pub async fn index_worktree(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: IndexWorktree,
 ) -> Result<IndexSummary> {
     blocking(&handlers.indexing_commands, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub fn drop_index(handlers: State<'_, Handlers>, input: DropIndex) -> Result<()> {
+pub fn drop_index(handlers: State<'_, Arc<Handlers>>, input: DropIndex) -> Result<()> {
     handlers.indexing_commands.handle(input)
 }
 
 #[tauri::command]
-pub async fn add_project(handlers: State<'_, Handlers>, input: AddProject) -> Result<WorktreeId> {
+pub async fn add_project(
+    handlers: State<'_, Arc<Handlers>>,
+    input: AddProject,
+) -> Result<WorktreeId> {
     blocking(&handlers.workspace_commands, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
 pub async fn create_worktree(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: CreateWorktree,
 ) -> Result<WorktreeId> {
     blocking(&handlers.workspace_commands, move |h| h.handle(input)).await
@@ -248,34 +256,37 @@ pub async fn create_worktree(
 
 #[tauri::command]
 pub async fn open_worktree(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: OpenWorktree,
 ) -> Result<WorktreeId> {
     blocking(&handlers.workspace_commands, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub async fn remove_worktree(handlers: State<'_, Handlers>, input: RemoveWorktree) -> Result<()> {
+pub async fn remove_worktree(
+    handlers: State<'_, Arc<Handlers>>,
+    input: RemoveWorktree,
+) -> Result<()> {
     blocking(&handlers.workspace_commands, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub fn close_tab(handlers: State<'_, Handlers>, input: CloseTab) -> Result<()> {
+pub fn close_tab(handlers: State<'_, Arc<Handlers>>, input: CloseTab) -> Result<()> {
     handlers.workspace_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn activate_tab(handlers: State<'_, Handlers>, input: ActivateTab) -> Result<()> {
+pub fn activate_tab(handlers: State<'_, Arc<Handlers>>, input: ActivateTab) -> Result<()> {
     handlers.workspace_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn toggle_group(handlers: State<'_, Handlers>, input: ToggleGroup) -> Result<()> {
+pub fn toggle_group(handlers: State<'_, Arc<Handlers>>, input: ToggleGroup) -> Result<()> {
     handlers.workspace_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn remove_project(handlers: State<'_, Handlers>, input: RemoveProject) -> Result<()> {
+pub fn remove_project(handlers: State<'_, Arc<Handlers>>, input: RemoveProject) -> Result<()> {
     handlers.workspace_commands.handle(input)
 }
 
@@ -283,38 +294,44 @@ pub fn remove_project(handlers: State<'_, Handlers>, input: RemoveProject) -> Re
 
 #[tauri::command]
 pub async fn get_system(
-    handlers: State<'_, Handlers>,
+    handlers: State<'_, Arc<Handlers>>,
     input: GetSystem,
 ) -> Result<Option<SystemView>> {
     blocking(&handlers.architecture_queries, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub async fn get_flow(handlers: State<'_, Handlers>, input: GetFlow) -> Result<Vec<FlowStep>> {
+pub async fn get_flow(handlers: State<'_, Arc<Handlers>>, input: GetFlow) -> Result<Vec<FlowStep>> {
     blocking(&handlers.architecture_queries, move |h| h.handle(input)).await
 }
 
 #[tauri::command]
-pub fn update_component(handlers: State<'_, Handlers>, input: UpdateComponent) -> Result<()> {
+pub fn update_component(handlers: State<'_, Arc<Handlers>>, input: UpdateComponent) -> Result<()> {
     handlers.architecture_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn merge_components(handlers: State<'_, Handlers>, input: MergeComponents) -> Result<String> {
+pub fn merge_components(
+    handlers: State<'_, Arc<Handlers>>,
+    input: MergeComponents,
+) -> Result<String> {
     handlers.architecture_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn split_component(handlers: State<'_, Handlers>, input: SplitComponent) -> Result<()> {
+pub fn split_component(handlers: State<'_, Arc<Handlers>>, input: SplitComponent) -> Result<()> {
     handlers.architecture_commands.handle(input)
 }
 
 #[tauri::command]
-pub fn set_rule_enabled(handlers: State<'_, Handlers>, input: SetRuleEnabled) -> Result<()> {
+pub fn set_rule_enabled(handlers: State<'_, Arc<Handlers>>, input: SetRuleEnabled) -> Result<()> {
     handlers.architecture_commands.handle(input)
 }
 
 #[tauri::command]
-pub async fn list_files(handlers: State<'_, Handlers>, input: ListFiles) -> Result<Vec<String>> {
+pub async fn list_files(
+    handlers: State<'_, Arc<Handlers>>,
+    input: ListFiles,
+) -> Result<Vec<String>> {
     blocking(&handlers.file_queries, move |h| h.handle(input)).await
 }

@@ -25,3 +25,6 @@ dist-ssr
 
 # CRM per-project data
 .crm/
+
+# Cargo workspace build output
+/target/

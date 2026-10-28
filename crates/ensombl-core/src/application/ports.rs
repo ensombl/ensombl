@@ -21,6 +21,12 @@ pub struct GitWorktreeInfo {
     pub is_main: bool,
 }
 
+/// Delivers events to whoever is listening outside the process: the Tauri
+/// frontend, or WebSocket clients of the headless server.
+pub trait EventBus: Send + Sync {
+    fn publish(&self, topic: &str, payload: serde_json::Value);
+}
+
 /// Git worktree operations.
 pub trait GitWorktrees: Send + Sync {
     /// Top level of the worktree containing `path`.
