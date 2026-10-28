@@ -39,13 +39,13 @@ export function WorktreeTab({ tab, active, accent }: WorktreeTabProps) {
           }}
           onClick={() => !active && activate.mutate({ worktreeId: worktree.id })}
           className={cn(
-            "group relative flex h-8 max-w-48 shrink-0 cursor-default items-center gap-1.5 rounded-md pr-1 pl-2.5 text-sm transition-colors",
+            "group relative flex h-6 max-w-44 shrink-0 cursor-default items-center gap-1 rounded pr-0.5 pl-2 text-xs transition-colors",
             active
               ? "bg-accent text-accent-foreground"
               : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
           )}
         >
-          {worktree.isMain ? <Home className="size-3.5 shrink-0" /> : <GitBranch className="size-3.5 shrink-0" />}
+          {worktree.isMain ? <Home className="size-3 shrink-0" /> : <GitBranch className="size-3 shrink-0" />}
           <span className="truncate">{tab.label}</span>
           <button
             type="button"
@@ -55,13 +55,13 @@ export function WorktreeTab({ tab, active, accent }: WorktreeTabProps) {
               close()
             }}
             className={cn(
-              "flex size-5 shrink-0 items-center justify-center rounded-sm hover:bg-muted-foreground/20",
+              "flex size-4 shrink-0 items-center justify-center rounded-sm hover:bg-muted-foreground/20",
               active ? "opacity-100" : "opacity-0 group-hover:opacity-100",
             )}
           >
             <X className="size-3" />
           </button>
-          <span className={cn("absolute inset-x-2 -bottom-[7px] h-0.5 rounded-full", accent)} />
+          <span className={cn("absolute inset-x-2 -bottom-[5px] h-0.5 rounded-full", accent)} />
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
