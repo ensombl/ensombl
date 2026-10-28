@@ -20,7 +20,7 @@ import { emptyChat, pendingPermissions, reduceAll, type ChatItem } from "../../m
 import { useChatStatus } from "../../model/chat-status"
 import { Composer } from "../composer"
 import { ChatActionsContext, type ChatActions } from "./chat-actions"
-import { ChatToolbar } from "./chat-toolbar"
+import { ChatControls } from "./chat-controls"
 import { CookingStatus } from "./cooking-status"
 import { Markdown } from "./markdown"
 import { PermissionCard, ToolCard } from "./tool-card"
@@ -179,14 +179,6 @@ export function ChatView({ chat, visible, model, patterns, onRestart, onClose }:
   return (
     <ChatActionsContext.Provider value={actions}>
       <div className={cn("absolute inset-0 flex flex-col", !visible && "invisible")}>
-        <ChatToolbar
-          mode={state.mode}
-          model={state.model}
-          costUsd={state.costUsd}
-          disabled={!state.running}
-          onMode={actions.setMode}
-          onModel={(m) => void setChatModel(chat.id, m).catch((e) => toast.error(String(e)))}
-        />
         <div
           ref={scroller}
           onScroll={(e) => {
@@ -226,6 +218,15 @@ export function ChatView({ chat, visible, model, patterns, onRestart, onClose }:
           disabled={!state.running}
           busy={state.busy}
           onStop={stop}
+          controls={
+            <ChatControls
+              mode={state.mode}
+              model={state.model}
+              disabled={!state.running}
+              onMode={actions.setMode}
+              onModel={(m) => void setChatModel(chat.id, m).catch((e) => toast.error(String(e)))}
+            />
+          }
           placeholder={`Message ${chat.title}… @ to tag a class, method or file`}
           onSend={(prompt) => {
             atBottom.current = true

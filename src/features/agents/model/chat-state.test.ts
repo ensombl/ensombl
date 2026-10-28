@@ -68,7 +68,7 @@ describe("reduceChat", () => {
       { type: "modeChanged", mode: "acceptEdits" },
       { type: "exited", code: 0 },
     ])
-    expect(state).toMatchObject({ sessionId: "s", model: "opus", mode: "acceptEdits", costUsd: 0.2, busy: false, running: false })
+    expect(state).toMatchObject({ sessionId: "s", model: "opus", mode: "acceptEdits", busy: false, running: false })
   })
 
   it("times the turn and counts tokens, preferring reported usage", () => {

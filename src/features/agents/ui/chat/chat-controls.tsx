@@ -13,21 +13,23 @@ const MODELS = ["opus", "sonnet", "haiku"] as const
 /** Maps a full model id (`claude-opus-…`) to the alias the picker shows. */
 const modelAlias = (model: string | null) => MODELS.find((m) => model?.includes(m)) ?? ""
 
-interface ChatToolbarProps {
+// Quiet triggers that sit inside the composer.
+const TRIGGER = "h-7 gap-1 border-0 bg-transparent px-2 text-xs text-muted-foreground shadow-none hover:text-foreground dark:bg-transparent"
+
+interface ChatControlsProps {
   mode: PermissionMode
   model: string | null
-  costUsd: number | null
   disabled: boolean
   onMode: (mode: PermissionMode) => void
   onModel: (model: string) => void
 }
 
-export function ChatToolbar({ mode, model, costUsd, disabled, onMode, onModel }: ChatToolbarProps) {
-  const alias = modelAlias(model)
+/** Permission mode and model pickers for the composer's bottom row. */
+export function ChatControls({ mode, model, disabled, onMode, onModel }: ChatControlsProps) {
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2">
+    <>
       <Select value={mode} onValueChange={(v) => onMode(v as PermissionMode)} disabled={disabled}>
-        <SelectTrigger size="sm" className="h-7 text-xs" aria-label="Permission mode">
+        <SelectTrigger size="sm" className={TRIGGER} aria-label="Permission mode">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -38,8 +40,8 @@ export function ChatToolbar({ mode, model, costUsd, disabled, onMode, onModel }:
           ))}
         </SelectContent>
       </Select>
-      <Select value={alias} onValueChange={onModel} disabled={disabled}>
-        <SelectTrigger size="sm" className="h-7 text-xs capitalize" aria-label="Model">
+      <Select value={modelAlias(model)} onValueChange={onModel} disabled={disabled}>
+        <SelectTrigger size="sm" className={`${TRIGGER} capitalize`} aria-label="Model">
           <SelectValue placeholder={model ?? "Model"} />
         </SelectTrigger>
         <SelectContent>
@@ -50,9 +52,6 @@ export function ChatToolbar({ mode, model, costUsd, disabled, onMode, onModel }:
           ))}
         </SelectContent>
       </Select>
-      <div className="ml-auto font-mono text-[11px] text-muted-foreground">
-        {costUsd !== null && <span title="Session cost">${costUsd.toFixed(2)}</span>}
-      </div>
-    </div>
+    </>
   )
 }

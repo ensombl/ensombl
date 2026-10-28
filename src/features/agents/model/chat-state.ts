@@ -39,7 +39,6 @@ export type ChatItem =
       isError: boolean
       result: string | null
       durationMs: number | null
-      costUsd: number | null
     }
   | { kind: "notice"; id: string; level: NoticeLevel; text: string }
 
@@ -75,7 +74,6 @@ export interface ChatState {
   sessionId: string | null
   model: string | null
   mode: PermissionMode
-  costUsd: number | null
   seq: number
 }
 
@@ -89,7 +87,6 @@ export const emptyChat = (): ChatState => ({
   sessionId: null,
   model: null,
   mode: "default",
-  costUsd: null,
   seq: 0,
 })
 
@@ -202,13 +199,11 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
         isError: event.isError,
         result: event.result,
         durationMs: event.durationMs,
-        costUsd: event.costUsd,
       })
       return {
         ...next,
         busy: false,
         turn: null,
-        costUsd: event.costUsd ?? next.costUsd,
       }
     }
     case "modeChanged":

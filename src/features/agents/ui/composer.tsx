@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { ArrowUp, AtSign, FileCode2, Shapes, Square, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,8 @@ interface ComposerProps {
   /** A turn is running; shows a stop button. */
   busy?: boolean
   onStop?: () => void
+  /** Extra controls in the box's bottom row (e.g. mode and model pickers). */
+  controls?: ReactNode
 }
 
 function SuggestionIcon({ s }: { s: Suggestion }) {
@@ -33,7 +35,7 @@ function SuggestionIcon({ s }: { s: Suggestion }) {
 }
 
 /** Prompt box for the active agent with `@` tagging of classes, members and files. */
-export function Composer({ model, patterns, onSend, placeholder, disabled, busy, onStop }: ComposerProps) {
+export function Composer({ model, patterns, onSend, placeholder, disabled, busy, onStop, controls }: ComposerProps) {
   const { tags, add, remove, clear, draft, takeDraft } = usePromptTags()
   const [text, setText] = useState("")
 
@@ -153,30 +155,35 @@ export function Composer({ model, patterns, onSend, placeholder, disabled, busy,
             ))}
           </div>
         )}
-        <Textarea
-          ref={input}
-          value={text}
-          rows={2}
-          placeholder={placeholder}
-          disabled={disabled}
-          onChange={(e) => {
-            setText(e.target.value)
-            setCaret(e.target.selectionStart)
-            setHighlight(0)
-          }}
-          onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
-          onKeyDown={onKeyDown}
-          className={cn("max-h-40 min-h-16 resize-none text-sm", busy && onStop ? "pr-20" : "pr-12")}
-        />
-        <div className="absolute right-2 bottom-2 flex gap-1">
-          {busy && onStop && (
-            <Button size="icon" variant="secondary" className="size-7" onClick={onStop} aria-label="Stop (Esc)" title="Stop (Esc)">
-              <Square className="fill-current" />
-            </Button>
-          )}
-          <Button size="icon" className="size-7 rounded-full" disabled={!canSend} onClick={() => void send()} aria-label="Send to agent">
-            <ArrowUp />
-          </Button>
+        <div className="rounded-md border border-input shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
+          <Textarea
+            ref={input}
+            value={text}
+            rows={2}
+            placeholder={placeholder}
+            disabled={disabled}
+            onChange={(e) => {
+              setText(e.target.value)
+              setCaret(e.target.selectionStart)
+              setHighlight(0)
+            }}
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+            onKeyDown={onKeyDown}
+            className="max-h-40 min-h-12 resize-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
+          />
+          <div className="flex items-center gap-1 px-1.5 pb-1.5">
+            {controls}
+            <div className="ml-auto flex gap-1">
+              {busy && onStop && (
+                <Button size="icon" variant="secondary" className="size-7" onClick={onStop} aria-label="Stop (Esc)" title="Stop (Esc)">
+                  <Square className="fill-current" />
+                </Button>
+              )}
+              <Button size="icon" className="size-7 rounded-full" disabled={!canSend} onClick={() => void send()} aria-label="Send to agent">
+                <ArrowUp />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
