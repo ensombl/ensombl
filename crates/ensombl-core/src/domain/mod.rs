@@ -5,6 +5,7 @@
 pub mod agent_run;
 pub mod linker;
 pub mod model;
+pub mod orchestration;
 pub mod parsed;
 pub mod patterns;
 pub mod review;
