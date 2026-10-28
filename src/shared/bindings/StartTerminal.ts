@@ -3,4 +3,8 @@
 /**
  * Starts an agent profile in a worktree. Output goes to the sink passed alongside.
  */
-export type StartTerminal = { worktreeId: string, profileId: string, cols: number, rows: number, };
+export type StartTerminal = { worktreeId: string, profileId: string, cols: number, rows: number, 
+/**
+ * Continue an agent session (Claude), e.g. taking over a task.
+ */
+resume?: string, };

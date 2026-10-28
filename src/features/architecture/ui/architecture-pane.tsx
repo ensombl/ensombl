@@ -1,4 +1,4 @@
-import { Boxes, Code2, Loader2, Network, RefreshCw, Route, ShieldCheck, Waypoints } from "lucide-react"
+import { Boxes, Code2, ListTodo, Loader2, Network, RefreshCw, Route, ShieldCheck, Waypoints } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -17,6 +17,7 @@ import { ComponentsCanvas } from "./components/components-canvas"
 import { BoundariesView } from "./boundaries/boundaries-view"
 import { DiagramCanvas } from "./diagram/diagram-canvas"
 import { CodeExplorer } from "./code/code-explorer"
+import { TasksView } from "@/features/orchestration/ui/tasks-view"
 import { FlowsView } from "./flows/flows-view"
 
 const TABS: { value: ArchitectureTab; label: string; icon: typeof Network }[] = [
@@ -25,6 +26,7 @@ const TABS: { value: ArchitectureTab; label: string; icon: typeof Network }[] = 
   { value: "boundaries", label: "Boundaries", icon: ShieldCheck },
   { value: "classes", label: "Classes", icon: Boxes },
   { value: "code", label: "Code", icon: Code2 },
+  { value: "tasks", label: "Tasks", icon: ListTodo },
 ]
 
 function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string }) {
@@ -78,6 +80,11 @@ function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string })
       <TabsContent value="code" className="min-h-0 flex-1">
         <ErrorBoundary resetKey={worktreeId}>
           <CodeExplorer />
+        </ErrorBoundary>
+      </TabsContent>
+      <TabsContent value="tasks" className="min-h-0 flex-1">
+        <ErrorBoundary resetKey={worktreeId}>
+          <TasksView />
         </ErrorBoundary>
       </TabsContent>
       <div className="flex h-10 shrink-0 items-center border-t px-2">

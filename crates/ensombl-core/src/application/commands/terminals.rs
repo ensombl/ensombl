@@ -13,7 +13,7 @@ use crate::application::ports::{
     PtyControl, PtySpawner, ShellEnvironment, SpawnSpec, TerminalSink, WorktreeResolver,
 };
 use crate::application::{Error, Result};
-use crate::domain::terminal::{AgentProfile, Scrollback, TerminalId, TerminalInfo};
+use crate::domain::terminal::{AgentKind, AgentProfile, Scrollback, TerminalId, TerminalInfo};
 use crate::domain::workspace::WorktreeId;
 
 /// Starts an agent profile in a worktree. Output goes to the sink passed alongside.
@@ -25,6 +25,10 @@ pub struct StartTerminal {
     pub profile_id: String,
     pub cols: u16,
     pub rows: u16,
+    /// Continue an agent session (Claude), e.g. taking over a task.
+    #[serde(default)]
+    #[ts(optional)]
+    pub resume: Option<String>,
 }
 
 /// Runs an arbitrary command line (e.g. a terminal editor) through the login shell.
@@ -269,7 +273,10 @@ impl CommandHandler<WithSink<StartTerminal>> for TerminalCommands {
             .iter()
             .find(|p| p.id == cmd.profile_id)
             .ok_or_else(|| Error::Invalid(format!("unknown agent {}", cmd.profile_id)))?;
-        let (program, args) = self.resolve_program(profile)?;
+        let (program, mut args) = self.resolve_program(profile)?;
+        if let (Some(session), AgentKind::Claude) = (cmd.resume, profile.kind) {
+            args.extend(["--resume".into(), session]);
+        }
         let siblings = self
             .registry
             .list(&cmd.worktree_id)
@@ -485,9 +492,28 @@ mod tests {
                 profile_id: profile.into(),
                 cols: 80,
                 rows: 24,
+                resume: None,
             },
             sink,
         })
+    }
+
+    #[test]
+    fn resumes_a_claude_session_when_asked() {
+        let (cmds, spawner, _) = setup();
+        cmds.handle(WithSink {
+            command: StartTerminal {
+                worktree_id: "wt".into(),
+                profile_id: "claude".into(),
+                cols: 80,
+                rows: 24,
+                resume: Some("s1".into()),
+            },
+            sink: Arc::new(Collect::default()),
+        })
+        .unwrap();
+        let spec = spawner.specs.lock().unwrap()[0].clone();
+        assert_eq!(spec.args, ["--resume", "s1"]);
     }
 
     #[test]

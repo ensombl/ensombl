@@ -5,7 +5,7 @@ import { useWorkspace } from "@/shared/workspace/workspace-context"
 import { closeTab, openTab } from "./open-files"
 import { defaultFilters, type SystemFilters } from "./system-view"
 
-export type ArchitectureTab = "components" | "flows" | "boundaries" | "classes" | "code"
+export type ArchitectureTab = "components" | "flows" | "boundaries" | "classes" | "code" | "tasks"
 
 /** Architecture-pane UI state for one worktree tab. Client-only. */
 export interface SystemUiState {

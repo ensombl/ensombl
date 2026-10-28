@@ -1,0 +1,79 @@
+import { useState } from "react"
+import { ListTodo, Plus } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
+import { PaneEmpty } from "@/shared/ui/pane"
+import { useWorkspace } from "@/shared/workspace/workspace-context"
+
+import { useTaskEvents } from "../model/use-task-events"
+import { useTasks } from "../queries/task-queries"
+import { NewTaskDialog } from "./new-task-dialog"
+import { TaskBoard } from "./task-board"
+import { TaskDetailPanel } from "./task-detail"
+
+/** The project's orchestrated tasks: a board, and the selected task beside it. */
+export function TasksView() {
+  const worktree = useWorkspace()
+  const { data: tasks = [] } = useTasks(worktree.projectId)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  useTaskEvents()
+  const open = tasks.some((t) => t.id === selected) ? selected : null
+
+  const dialog = (
+    <NewTaskDialog
+      projectId={worktree.projectId}
+      defaultBase={worktree.branch ?? "main"}
+      tasks={tasks}
+      open={creating}
+      onOpenChange={setCreating}
+      onCreated={(task) => setSelected(task.id)}
+    />
+  )
+
+  if (tasks.length === 0) {
+    return (
+      <>
+        <PaneEmpty
+          icon={<ListTodo />}
+          title="No tasks yet"
+          description="Hand work to agents. Each task runs on its own branch while you keep working, and merges only when you approve it."
+        >
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <Plus /> New task
+          </Button>
+        </PaneEmpty>
+        {dialog}
+      </>
+    )
+  }
+
+  return (
+    <ResizablePanelGroup orientation="horizontal" className="h-full">
+      <ResizablePanel id="task-board" minSize="30" className="flex min-w-0 flex-col">
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+          <span className="text-xs text-muted-foreground">
+            {tasks.filter((t) => t.status === "running" || t.status === "needsInput").length} running ·{" "}
+            {tasks.filter((t) => t.status === "review").length} to review
+          </span>
+          <Button size="sm" className="ml-auto h-7" onClick={() => setCreating(true)}>
+            <Plus /> New task
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1">
+          <TaskBoard tasks={tasks} selected={open} onSelect={setSelected} />
+        </div>
+      </ResizablePanel>
+      {open && (
+        <>
+          <ResizableHandle />
+          <ResizablePanel id="task-detail" defaultSize="40" minSize="25" className="min-w-0">
+            <TaskDetailPanel key={open} taskId={open} onClose={() => setSelected(null)} />
+          </ResizablePanel>
+        </>
+      )}
+      {dialog}
+    </ResizablePanelGroup>
+  )
+}
