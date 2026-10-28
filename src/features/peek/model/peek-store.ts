@@ -1,5 +1,7 @@
 import { create } from "zustand"
 
+import { useWorkspace } from "@/shared/workspace/workspace-context"
+
 /** What the peek drawer is showing. Client-only UI state; it never reaches the backend. */
 export interface PeekTarget {
   file: string
@@ -8,13 +10,23 @@ export interface PeekTarget {
 }
 
 interface PeekState {
-  target: PeekTarget | null
-  open: (target: PeekTarget) => void
-  close: () => void
+  /** Peek target per worktree tab. */
+  targets: Record<string, PeekTarget | undefined>
+  open: (worktreeId: string, target: PeekTarget) => void
+  close: (worktreeId: string) => void
 }
 
 export const usePeekStore = create<PeekState>((set) => ({
-  target: null,
-  open: (target) => set({ target }),
-  close: () => set({ target: null }),
+  targets: {},
+  open: (worktreeId, target) => set((s) => ({ targets: { ...s.targets, [worktreeId]: target } })),
+  close: (worktreeId) => set((s) => ({ targets: { ...s.targets, [worktreeId]: undefined } })),
 }))
+
+/** Peek state for the current worktree tab. */
+export function usePeek() {
+  const { id } = useWorkspace()
+  const target = usePeekStore((s) => s.targets[id])
+  const open = usePeekStore((s) => s.open)
+  const close = usePeekStore((s) => s.close)
+  return { target, open: (t: PeekTarget) => open(id, t), close: () => close(id) }
+}

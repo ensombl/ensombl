@@ -3,3 +3,4 @@
 //! the IPC boundary unchanged; that's a derive, not a dependency on Tauri.
 
 pub mod model;
+pub mod workspace;

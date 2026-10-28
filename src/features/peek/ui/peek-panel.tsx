@@ -3,10 +3,10 @@ import { Code2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Pane } from "@/shared/ui/pane"
 
-import { usePeekStore, type PeekTarget } from "../model/peek-store"
+import { usePeek, type PeekTarget } from "../model/peek-store"
 
 export function PeekPanel({ target }: { target: PeekTarget }) {
-  const close = usePeekStore((s) => s.close)
+  const { close } = usePeek()
 
   return (
     <Pane
