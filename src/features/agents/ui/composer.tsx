@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { AtSign, CornerDownLeft, FileCode2, Shapes, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -30,8 +30,20 @@ function SuggestionIcon({ s }: { s: Suggestion }) {
 
 /** Prompt box for the active agent with `@` tagging of classes, members and files. */
 export function Composer({ model, patterns, target }: ComposerProps) {
-  const { tags, add, remove, clear } = usePromptTags()
+  const { tags, add, remove, clear, draft, takeDraft } = usePromptTags()
   const [text, setText] = useState("")
+
+  // Pick up text queued elsewhere (e.g. "Send review to agent").
+  useEffect(() => {
+    if (!draft) return
+    const frame = requestAnimationFrame(() => {
+      const queued = takeDraft()
+      if (!queued) return
+      setText((current) => (current.trim() ? `${current}\n\n${queued}` : queued))
+      input.current?.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [draft]) // eslint-disable-line react-hooks/exhaustive-deps
   const [caret, setCaret] = useState(0)
   const [highlight, setHighlight] = useState(0)
   const input = useRef<HTMLTextAreaElement>(null)

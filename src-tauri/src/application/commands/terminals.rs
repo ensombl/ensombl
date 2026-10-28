@@ -27,6 +27,16 @@ pub struct StartTerminal {
     pub rows: u16,
 }
 
+/// Runs an arbitrary command line (e.g. a terminal editor) through the login shell.
+#[derive(Debug)]
+pub struct StartCommand {
+    pub worktree_id: WorktreeId,
+    pub command_line: String,
+    pub title: String,
+    pub cols: u16,
+    pub rows: u16,
+}
+
 /// Re-attaches a view: replays scrollback into the new sink, then streams.
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +77,9 @@ pub struct WithSink<C> {
 }
 
 impl Command for WithSink<StartTerminal> {
+    type Output = TerminalInfo;
+}
+impl Command for WithSink<StartCommand> {
     type Output = TerminalInfo;
 }
 impl Command for WithSink<AttachTerminal> {
@@ -195,49 +208,43 @@ fn pump(terminal: Arc<Terminal>, mut output: Box<dyn Read + Send>) {
     });
 }
 
-impl CommandHandler<WithSink<StartTerminal>> for TerminalCommands {
-    fn handle(
-        &self,
-        WithSink { command: cmd, sink }: WithSink<StartTerminal>,
-    ) -> Result<TerminalInfo> {
-        let session = self.sessions.get()?;
-        let worktree = session
+/// What a new terminal runs and how it's labelled.
+struct Launch {
+    worktree_id: WorktreeId,
+    profile_id: String,
+    title: String,
+    program: PathBuf,
+    args: Vec<String>,
+    cols: u16,
+    rows: u16,
+}
+
+impl TerminalCommands {
+    fn worktree_path(&self, worktree_id: &str) -> Result<PathBuf> {
+        self.sessions
+            .get()?
             .tabs
             .iter()
-            .find(|t| t.id == cmd.worktree_id)
-            .ok_or_else(|| Error::Invalid(format!("worktree {} isn't open", cmd.worktree_id)))?;
-        let profile = self
-            .profiles
-            .iter()
-            .find(|p| p.id == cmd.profile_id)
-            .ok_or_else(|| Error::Invalid(format!("unknown agent {}", cmd.profile_id)))?;
+            .find(|t| t.id == worktree_id)
+            .map(|t| PathBuf::from(&t.path))
+            .ok_or_else(|| Error::Invalid(format!("worktree {worktree_id} isn't open")))
+    }
 
-        let (program, args) = self.resolve_program(profile)?;
+    fn launch(&self, launch: Launch, sink: Arc<dyn TerminalSink>) -> Result<TerminalInfo> {
         let spawned = self.spawner.spawn(SpawnSpec {
-            program,
-            args,
-            cwd: worktree.path.clone().into(),
+            program: launch.program,
+            args: launch.args,
+            cwd: self.worktree_path(&launch.worktree_id)?,
             env: self.shell.env(),
-            cols: cmd.cols.max(10),
-            rows: cmd.rows.max(4),
+            cols: launch.cols.max(10),
+            rows: launch.rows.max(4),
         })?;
-
         let id = self.registry.next_id();
-        let siblings = self
-            .registry
-            .list(&cmd.worktree_id)
-            .iter()
-            .filter(|t| t.profile_id == profile.id)
-            .count();
         let info = TerminalInfo {
             id: id.clone(),
-            worktree_id: cmd.worktree_id.clone(),
-            profile_id: profile.id.clone(),
-            title: if siblings == 0 {
-                profile.label.clone()
-            } else {
-                format!("{} {}", profile.label, siblings + 1)
-            },
+            worktree_id: launch.worktree_id,
+            profile_id: launch.profile_id,
+            title: launch.title,
             running: true,
             exit_code: None,
         };
@@ -254,6 +261,64 @@ impl CommandHandler<WithSink<StartTerminal>> for TerminalCommands {
             .insert(id, terminal.clone());
         pump(terminal, spawned.output);
         Ok(info)
+    }
+}
+
+impl CommandHandler<WithSink<StartTerminal>> for TerminalCommands {
+    fn handle(
+        &self,
+        WithSink { command: cmd, sink }: WithSink<StartTerminal>,
+    ) -> Result<TerminalInfo> {
+        self.worktree_path(&cmd.worktree_id)?;
+        let profile = self
+            .profiles
+            .iter()
+            .find(|p| p.id == cmd.profile_id)
+            .ok_or_else(|| Error::Invalid(format!("unknown agent {}", cmd.profile_id)))?;
+        let (program, args) = self.resolve_program(profile)?;
+        let siblings = self
+            .registry
+            .list(&cmd.worktree_id)
+            .iter()
+            .filter(|t| t.profile_id == profile.id)
+            .count();
+        let title = if siblings == 0 {
+            profile.label.clone()
+        } else {
+            format!("{} {}", profile.label, siblings + 1)
+        };
+        self.launch(
+            Launch {
+                worktree_id: cmd.worktree_id,
+                profile_id: profile.id.clone(),
+                title,
+                program,
+                args,
+                cols: cmd.cols,
+                rows: cmd.rows,
+            },
+            sink,
+        )
+    }
+}
+
+impl CommandHandler<WithSink<StartCommand>> for TerminalCommands {
+    fn handle(
+        &self,
+        WithSink { command: cmd, sink }: WithSink<StartCommand>,
+    ) -> Result<TerminalInfo> {
+        self.launch(
+            Launch {
+                worktree_id: cmd.worktree_id,
+                profile_id: "command".into(),
+                title: cmd.title,
+                program: self.shell.shell(),
+                args: vec!["-lc".into(), cmd.command_line],
+                cols: cmd.cols,
+                rows: cmd.rows,
+            },
+            sink,
+        )
     }
 }
 

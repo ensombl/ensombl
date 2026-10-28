@@ -8,5 +8,6 @@ pub mod ids;
 pub mod index_registry;
 pub mod ports;
 pub mod queries;
+pub mod worktrees;
 
 pub use error::{Error, Result};
