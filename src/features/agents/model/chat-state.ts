@@ -43,6 +43,26 @@ export type ChatItem =
     }
   | { kind: "notice"; id: string; level: NoticeLevel; text: string }
 
+/** The turn in progress: when it started and how many tokens it has produced. */
+export interface Turn {
+  startedAt: number
+  /** Output tokens reported for finished messages. */
+  actual: Record<string, number>
+  /** Rough count from streamed text for messages still streaming. */
+  estimate: Record<string, number>
+}
+
+/** Output tokens so far: real counts where known, estimates otherwise. */
+export function turnTokens(turn: Turn): number {
+  let total = 0
+  for (const [id, n] of Object.entries(turn.estimate)) if (!(id in turn.actual)) total += n
+  for (const n of Object.values(turn.actual)) total += n
+  return Math.round(total)
+}
+
+// Roughly four characters per token, good enough for a live counter.
+const CHARS_PER_TOKEN = 4
+
 export interface ChatState {
   items: ChatItem[]
   /** Item id to its path through `items` and `children`. */
@@ -50,6 +70,7 @@ export interface ChatState {
   /** Messages whose blocks were streamed, so their final copy only fills in tool input. */
   streamed: Record<string, true>
   busy: boolean
+  turn: Turn | null
   running: boolean
   sessionId: string | null
   model: string | null
@@ -63,6 +84,7 @@ export const emptyChat = (): ChatState => ({
   paths: {},
   streamed: {},
   busy: false,
+  turn: null,
   running: true,
   sessionId: null,
   model: null,
@@ -115,15 +137,27 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
     case "session":
       return { ...s, sessionId: event.sessionId, model: event.model ?? s.model, mode: event.permissionMode ?? s.mode }
     case "user":
-      return { ...append(s, { kind: "user", id: `user:${event.id}`, text: event.text }), busy: true }
+      return {
+        ...append(s, { kind: "user", id: `user:${event.id}`, text: event.text }),
+        busy: true,
+        // A message sent mid-turn joins the running turn.
+        turn: s.turn ?? { startedAt: event.at, actual: {}, estimate: {} },
+      }
     case "blockStart": {
       const id = event.block.type === "toolUse" ? event.block.id : `${event.messageId}:${event.index}`
       if (s.paths[id]) return s
       const next = append(s, blockItem(id, event.block), event.parent)
       return { ...next, streamed: { ...next.streamed, [event.messageId]: true } }
     }
-    case "blockDelta":
-      return update(s, `${event.messageId}:${event.index}`, (item) => withText(item, event.text))
+    case "blockDelta": {
+      const next = update(s, `${event.messageId}:${event.index}`, (item) => withText(item, event.text))
+      if (!next.turn) return next
+      const { estimate } = next.turn
+      const tokens = (estimate[event.messageId] ?? 0) + event.text.length / CHARS_PER_TOKEN
+      return { ...next, turn: { ...next.turn, estimate: { ...estimate, [event.messageId]: tokens } } }
+    }
+    case "usage":
+      return s.turn ? { ...s, turn: { ...s.turn, actual: { ...s.turn.actual, [event.messageId]: event.outputTokens } } } : s
     case "assistant": {
       let next = s
       event.blocks.forEach((block, n) => {
@@ -173,6 +207,7 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
       return {
         ...next,
         busy: false,
+        turn: null,
         costUsd: event.costUsd ?? next.costUsd,
       }
     }
@@ -183,7 +218,7 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
     case "notice":
       return append(s, { kind: "notice", id: `notice:${seq}`, level: event.level, text: event.text })
     case "exited":
-      return { ...s, running: false, busy: false }
+      return { ...s, running: false, busy: false, turn: null }
   }
 }
 

@@ -6,7 +6,11 @@ import type { PermissionMode } from "./PermissionMode";
 /**
  * One thing that happened in a chat, in order.
  */
-export type ChatEvent = { "type": "session", sessionId: string, model: string | null, permissionMode: PermissionMode | null, } | { "type": "user", id: string, text: string, } | { "type": "blockStart", messageId: string, parent: string | null, index: number, block: ContentBlock, } | { "type": "blockDelta", messageId: string, index: number, text: string, } | { "type": "assistant", messageId: string, parent: string | null, blocks: Array<ContentBlock>, } | { "type": "toolResult", toolUseId: string, content: string, isError: boolean, } | { "type": "permission", requestId: string, toolName: string, toolUseId: string | null, input: unknown, description: string | null, } | { "type": "permissionResolved", requestId: string, allowed: boolean, } | { "type": "turnComplete", isError: boolean, result: string | null, durationMs: number | null, 
+export type ChatEvent = { "type": "session", sessionId: string, model: string | null, permissionMode: PermissionMode | null, } | { "type": "user", id: string, text: string, 
+/**
+ * When it was sent, in ms since the epoch; the UI times the turn from it.
+ */
+at: number, } | { "type": "blockStart", messageId: string, parent: string | null, index: number, block: ContentBlock, } | { "type": "blockDelta", messageId: string, index: number, text: string, } | { "type": "usage", messageId: string, outputTokens: number, } | { "type": "assistant", messageId: string, parent: string | null, blocks: Array<ContentBlock>, } | { "type": "toolResult", toolUseId: string, content: string, isError: boolean, } | { "type": "permission", requestId: string, toolName: string, toolUseId: string | null, input: unknown, description: string | null, } | { "type": "permissionResolved", requestId: string, allowed: boolean, } | { "type": "turnComplete", isError: boolean, result: string | null, durationMs: number | null, 
 /**
  * Cumulative cost of the session so far.
  */

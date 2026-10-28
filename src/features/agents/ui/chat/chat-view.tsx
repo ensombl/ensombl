@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react"
-import { Brain, ChevronRight, CircleAlert, Info, Loader2, RotateCcw, Sparkles, X } from "lucide-react"
+import { Brain, ChevronRight, CircleAlert, Info, RotateCcw, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,7 @@ import { useChatStatus } from "../../model/chat-status"
 import { Composer } from "../composer"
 import { ChatActionsContext, type ChatActions } from "./chat-actions"
 import { ChatToolbar } from "./chat-toolbar"
+import { CookingStatus } from "./cooking-status"
 import { Markdown } from "./markdown"
 import { PermissionCard, ToolCard } from "./tool-card"
 
@@ -174,8 +175,6 @@ export function ChatView({ chat, visible, model, patterns, onRestart, onClose }:
   )
 
   const stop = useCallback(() => void interruptChat(chat.id), [chat.id])
-  const last = state.items[state.items.length - 1]
-  const streamingText = last?.kind === "text" || last?.kind === "thinking"
 
   return (
     <ChatActionsContext.Provider value={actions}>
@@ -207,11 +206,7 @@ export function ChatView({ chat, visible, model, patterns, onRestart, onClose }:
             {state.items.map((item) => (
               <Row key={item.id} item={item} />
             ))}
-            {state.busy && !streamingText && (
-              <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" /> Working…
-              </p>
-            )}
+            {state.busy && state.turn && <CookingStatus key={state.turn.startedAt} turn={state.turn} waiting={needsInput} />}
             {!state.running && (
               <div className="flex items-center gap-2 rounded-lg border bg-card p-2 pl-3 text-sm">
                 <span className="text-muted-foreground">The agent has exited.</span>
