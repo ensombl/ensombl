@@ -6,6 +6,7 @@ import type { ModelUpdated } from "@/shared/bindings/ModelUpdated"
 import { useBackendEvent } from "@/shared/ipc/events"
 
 import { dropIndex, useIndexWorktree } from "../commands/indexing-commands"
+import { useChangesStore } from "./changes-store"
 import { modelKeys, useModel } from "../queries/model-queries"
 
 /**
@@ -31,8 +32,11 @@ export function useWorktreeIndex(worktreeId: string) {
     setProgress(p.done >= p.total ? null : { done: p.done, total: p.total })
   })
 
+  const markChanged = useChangesStore((s) => s.mark)
   useBackendEvent<ModelUpdated>("index://updated", (u) => {
-    if (u.worktreeId === worktreeId) client.invalidateQueries({ queryKey: modelKeys.model(worktreeId) })
+    if (u.worktreeId !== worktreeId) return
+    client.invalidateQueries({ queryKey: modelKeys.model(worktreeId) })
+    if (u.changed.length > 0) markChanged(worktreeId, u.changed)
   })
 
   return {

@@ -151,3 +151,14 @@
 .react-flow__minimap {
   @apply overflow-hidden rounded-lg border shadow-sm;
 }
+
+/* Flash on nodes an agent just changed. */
+@keyframes crm-change-flash {
+  0% { opacity: 1; transform: scale(1); }
+  70% { opacity: 0.6; transform: scale(1.04); }
+  100% { opacity: 0; transform: scale(1.08); }
+}
+.crm-change-flash {
+  animation: crm-change-flash 0.9s ease-out 3;
+  opacity: 0;
+}

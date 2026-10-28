@@ -1,4 +1,4 @@
-import { ChevronsDownUp, ChevronsUpDown, FlaskConical, FunctionSquare, Network, Search } from "lucide-react"
+import { ChevronsDownUp, ChevronsUpDown, FlaskConical, FunctionSquare, Network, Search, Sparkle, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -28,6 +28,9 @@ interface DiagramToolbarProps {
   onShowFunctions: (show: boolean) => void
   onExpandAll: () => void
   onCollapseAll: () => void
+  changedCount: number
+  onNextChange: () => void
+  onClearChanges: () => void
 }
 
 export function DiagramToolbar(props: DiagramToolbarProps) {
@@ -102,6 +105,27 @@ export function DiagramToolbar(props: DiagramToolbarProps) {
         </TooltipTrigger>
         <TooltipContent>Collapse to packages</TooltipContent>
       </Tooltip>
+      {props.changedCount > 0 && (
+        <div className="flex h-8 items-center rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-200">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" onClick={props.onNextChange} className="flex h-full items-center gap-1.5 px-2.5 text-xs font-medium">
+                <Sparkle className="size-3.5" />
+                {props.changedCount} changed
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Jump to the latest change</TooltipContent>
+          </Tooltip>
+          <button
+            type="button"
+            onClick={props.onClearChanges}
+            aria-label="Clear changes"
+            className="flex h-full items-center border-l border-amber-500/30 px-1.5 hover:bg-amber-500/20"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

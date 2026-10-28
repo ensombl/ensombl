@@ -7,9 +7,18 @@ import { cn } from "@/lib/utils"
 import { SIZES } from "../../layout/sizes"
 import { useDiagram } from "../../model/diagram-store"
 import { packageColor } from "../../model/package-colors"
+import { ChangeMarker } from "./change-marker"
 
 export type GroupFlowNode = Node<
-  { label: string; title: string; pkg: string; level: "package" | "folder"; expanded: boolean; symbolCount: number },
+  {
+    label: string
+    title: string
+    pkg: string
+    level: "package" | "folder"
+    expanded: boolean
+    symbolCount: number
+    changedAt?: number
+  },
   "group"
 >
 
@@ -54,7 +63,7 @@ function GroupNodeView({ id, data, selected }: NodeProps<GroupFlowNode>) {
       onDoubleClick={toggle}
       title={data.title}
       className={cn(
-        "flex h-full w-full items-center gap-2.5 overflow-hidden rounded-lg border border-l-4 bg-card px-2.5 text-card-foreground shadow-sm transition-colors hover:bg-accent/40",
+        "relative flex h-full w-full items-center gap-2.5 rounded-lg border border-l-4 bg-card px-2.5 text-card-foreground shadow-sm transition-colors hover:bg-accent/40",
         !isPackage && "border-dashed",
         selected && "ring-2 ring-ring",
       )}
@@ -62,6 +71,7 @@ function GroupNodeView({ id, data, selected }: NodeProps<GroupFlowNode>) {
     >
       <Handle type="source" position={Position.Top} className="!opacity-0" />
       <Handle type="target" position={Position.Bottom} className="!opacity-0" />
+      <ChangeMarker changedAt={data.changedAt} />
       <div className="flex size-7 shrink-0 items-center justify-center rounded-md" style={{ background: color.tint, color: color.value }}>
         <Icon className="size-4" />
       </div>
