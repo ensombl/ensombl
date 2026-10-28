@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
-import { ipc } from "./ipc";
+import { ipc } from "@/ipc";
 
 describe("ipc", () => {
   afterEach(() => clearMocks());
