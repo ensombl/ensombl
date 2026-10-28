@@ -9,17 +9,18 @@ import { ALL_EDGE_KINDS, type ViewFilters } from "./view"
 export interface DiagramState {
   initialized: boolean
   expanded: Set<string>
-  open: Set<string>
   filters: ViewFilters
-  /** Symbol to center on once it's laid out. */
+  /** Symbol shown in the inspector. */
+  selected: string | null
+  /** Node to center on once it's laid out. */
   focus: string | null
 }
 
 const initial = (): DiagramState => ({
   initialized: false,
   expanded: new Set(),
-  open: new Set(),
-  filters: { hideTests: true, edgeKinds: ALL_EDGE_KINDS },
+  filters: { hideTests: true, showFunctions: false, edgeKinds: ALL_EDGE_KINDS },
+  selected: null,
   focus: null,
 })
 
@@ -55,16 +56,18 @@ export function useDiagram() {
     state,
     init: (expanded: Set<string>) => update((s) => (s.initialized ? {} : { initialized: true, expanded })),
     toggleGroup: (groupId: string) => update((s) => ({ expanded: toggle(s.expanded, groupId) })),
-    toggleOpen: (symbolId: string) => update((s) => ({ open: toggle(s.open, symbolId) })),
-    expandAll: (ids: string[]) => update(() => ({ expanded: new Set(ids) })),
-    collapseAll: () => update(() => ({ expanded: new Set(), open: new Set() })),
-    setHideTests: (hideTests: boolean) => update((s) => ({ filters: { ...s.filters, hideTests } })),
+    setExpanded: (expanded: Set<string>) => update(() => ({ expanded })),
+    collapseAll: () => update(() => ({ expanded: new Set() })),
+    setFilters: (filters: Partial<ViewFilters>) => update((s) => ({ filters: { ...s.filters, ...filters } })),
     setEdgeKinds: (edgeKinds: EdgeKind[]) => update((s) => ({ filters: { ...s.filters, edgeKinds } })),
-    reveal: (symbolId: string, ancestors: string[]) =>
+    select: (symbolId: string | null) => update(() => ({ selected: symbolId })),
+    /** Expands the symbol's ancestors, selects it and centers on it. */
+    reveal: (symbolId: string, ancestors: string[], needsFunctions = false) =>
       update((s) => ({
         expanded: new Set([...s.expanded, ...ancestors]),
-        open: new Set([...s.open, symbolId]),
+        selected: symbolId,
         focus: symbolId,
+        filters: needsFunctions ? { ...s.filters, showFunctions: true } : s.filters,
       })),
     clearFocus: () => update(() => ({ focus: null })),
   }

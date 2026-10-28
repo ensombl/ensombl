@@ -2,6 +2,7 @@ import { Loader2, Network, RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
+import { ErrorBoundary } from "@/shared/ui/error-boundary"
 import { Pane, PaneEmpty } from "@/shared/ui/pane"
 import { useWorkspace } from "@/shared/workspace/workspace-context"
 
@@ -45,7 +46,9 @@ export function ArchitecturePane() {
           )}
         </PaneEmpty>
       ) : (
-        <DiagramCanvas model={model} />
+        <ErrorBoundary resetKey={model}>
+          <DiagramCanvas model={model} />
+        </ErrorBoundary>
       )}
     </Pane>
   )
