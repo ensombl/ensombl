@@ -14,7 +14,7 @@ export function TabStrip({ session }: { session: SessionView }) {
   const projects = session.groups.map((g) => g.project)
 
   return (
-    <div role="tablist" data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+    <div role="tablist" data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {session.groups.map(({ project, tabs }) => (
         <Fragment key={project.id}>
           <div data-tauri-drag-region className="flex shrink-0 items-center gap-1 pl-1 first:pl-0">

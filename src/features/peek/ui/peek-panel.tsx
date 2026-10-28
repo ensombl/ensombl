@@ -17,7 +17,7 @@ import { reviewPrompt } from "../model/review-prompt"
 import { useComments, useSettings, useSource } from "../queries/peek-queries"
 import { CodeView } from "./code-view"
 
-function EditorSettings() {
+export function EditorSettings() {
   const { data } = useSettings()
   const update = useUpdateSettings()
   const [value, setValue] = useState<string | null>(null)

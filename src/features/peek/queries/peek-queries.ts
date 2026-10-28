@@ -6,6 +6,7 @@ import type { SourceText } from "@/shared/bindings/SourceText"
 import { query } from "@/shared/ipc/client"
 
 export const peekKeys = {
+  sources: (worktreeId: string) => ["source", worktreeId] as const,
   source: (worktreeId: string, path: string) => ["source", worktreeId, path] as const,
   comments: (worktreeId: string) => ["comments", worktreeId] as const,
   settings: () => ["settings"] as const,

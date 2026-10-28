@@ -16,7 +16,8 @@ use crate::application::commands::chats::{
 use crate::application::commands::indexing::{DropIndex, IndexSummary, IndexWorktree};
 use crate::application::commands::patterns::SetPatternDecision;
 use crate::application::commands::review::{
-    AddComment, DeleteComment, EditorLaunch, OpenInEditor, ResolveComment, UpdateSettings,
+    AddComment, DeleteComment, EditorLaunch, OpenInEditor, ResolveComment, SaveSource,
+    UpdateSettings,
 };
 use crate::application::commands::terminals::{
     AttachTerminal, CloseTerminal, ResizeTerminal, StartTerminal, WithSink, WriteTerminal,
@@ -166,6 +167,11 @@ pub async fn open_in_editor(
     handlers: State<'_, Handlers>,
     input: OpenInEditor,
 ) -> Result<EditorLaunch> {
+    blocking(&handlers.review_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn save_source(handlers: State<'_, Handlers>, input: SaveSource) -> Result<()> {
     blocking(&handlers.review_commands, move |h| h.handle(input)).await
 }
 

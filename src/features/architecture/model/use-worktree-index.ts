@@ -6,6 +6,8 @@ import type { IndexProgress } from "@/shared/bindings/IndexProgress"
 import type { ModelUpdated } from "@/shared/bindings/ModelUpdated"
 import { useBackendEvent } from "@/shared/ipc/events"
 
+import { peekKeys } from "@/features/peek/queries/peek-queries"
+
 import { dropIndex, useIndexWorktree } from "../commands/indexing-commands"
 import { applyDelta } from "./apply-delta"
 import { useChangesStore } from "./changes-store"
@@ -46,6 +48,8 @@ export function useWorktreeIndex(worktreeId: string) {
     // The system view is derived on the backend; refetch it after a quiet moment.
     clearTimeout(systemRefetch.current)
     systemRefetch.current = setTimeout(() => client.invalidateQueries({ queryKey: systemKeys.system(worktreeId) }), SYSTEM_REFETCH_DELAY)
+    // Open files may have been edited by an agent.
+    client.invalidateQueries({ queryKey: peekKeys.sources(worktreeId) })
     const key = modelKeys.model(worktreeId)
     const current = client.getQueryData<ArchModel | null>(key)
     if (!u.delta || !current) {

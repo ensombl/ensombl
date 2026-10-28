@@ -63,6 +63,20 @@ pub struct OpenInEditor {
     pub line: u32,
 }
 
+/// Saves a file edited in the Code tab.
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SaveSource {
+    pub worktree_id: WorktreeId,
+    pub path: String,
+    pub content: String,
+    /// What the editor loaded; the save is refused if the file has changed
+    /// since (an agent edited it). `None` overwrites.
+    #[ts(optional)]
+    pub base: Option<String>,
+}
+
 /// Terminal editors open in an agent tab; GUI editors are launched detached.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -86,6 +100,19 @@ impl Command for UpdateSettings {
 }
 impl Command for OpenInEditor {
     type Output = EditorLaunch;
+}
+impl Command for SaveSource {
+    type Output = ();
+}
+
+/// Refuses to overwrite a file that changed under the editor.
+fn check_base(path: &str, current: &str, base: Option<&str>) -> Result<()> {
+    match base {
+        Some(base) if base != current => Err(Error::Invalid(format!(
+            "{path} changed on disk since you opened it"
+        ))),
+        _ => Ok(()),
+    }
 }
 
 const GUI_EDITORS: &[&str] = &[
@@ -256,9 +283,27 @@ impl CommandHandler<OpenInEditor> for ReviewCommands {
     }
 }
 
+impl CommandHandler<SaveSource> for ReviewCommands {
+    fn handle(&self, cmd: SaveSource) -> Result<()> {
+        let root = worktree_root(self.sessions.as_ref(), &cmd.worktree_id)?;
+        let file = safe_join(&root, &cmd.path)?;
+        let current = std::fs::read_to_string(&file)?;
+        check_base(&cmd.path, &current, cmd.base.as_deref())?;
+        std::fs::write(file, cmd.content)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn refuses_saves_over_changes_made_on_disk() {
+        assert!(check_base("a.ts", "x", Some("x")).is_ok());
+        assert!(check_base("a.ts", "y", None).is_ok());
+        assert!(check_base("a.ts", "y", Some("x")).is_err());
+    }
 
     #[test]
     fn builds_editor_command_lines() {

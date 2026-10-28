@@ -4,7 +4,7 @@ import { useWorkspace } from "@/shared/workspace/workspace-context"
 
 import { defaultFilters, type SystemFilters } from "./system-view"
 
-export type ArchitectureTab = "components" | "flows" | "boundaries" | "code" | "files"
+export type ArchitectureTab = "components" | "flows" | "boundaries" | "classes" | "code"
 
 /** Architecture-pane UI state for one worktree tab. Client-only. */
 export interface SystemUiState {
@@ -16,11 +16,12 @@ export interface SystemUiState {
   filters: SystemFilters
   /** Entry point open in the Flows tab. */
   entry: string | null
-  /** File open in the Files tab. */
+  /** File open in the Code tab, and the line to show. */
   file: string | null
+  line: number
 }
 
-const initial = (): SystemUiState => ({ tab: "components", focus: null, selected: null, filters: defaultFilters(), entry: null, file: null })
+const initial = (): SystemUiState => ({ tab: "components", focus: null, selected: null, filters: defaultFilters(), entry: null, file: null, line: 1 })
 
 // One shared fallback so untouched tabs see a stable object (and stable memo deps).
 const DEFAULT = initial()
@@ -47,6 +48,8 @@ export function useSystemUi() {
     select: (selected: string | null) => set({ selected }),
     setFilters: (filters: Partial<SystemFilters>) => set({ filters: { ...state.filters, ...filters } }),
     openEntry: (entry: string | null) => set({ entry, tab: "flows" }),
-    openFile: (file: string | null) => set({ file }),
+    openFile: (file: string | null, line = 1) => set({ file, line }),
+    /** Jump to a file in the Code tab. */
+    showFile: (file: string, line = 1) => set({ file, line, tab: "code" }),
   }
 }

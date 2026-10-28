@@ -7,6 +7,7 @@ import type { DeleteComment } from "@/shared/bindings/DeleteComment"
 import type { EditorLaunch } from "@/shared/bindings/EditorLaunch"
 import type { OpenInEditor } from "@/shared/bindings/OpenInEditor"
 import type { ResolveComment } from "@/shared/bindings/ResolveComment"
+import type { SaveSource } from "@/shared/bindings/SaveSource"
 import type { Settings } from "@/shared/bindings/Settings"
 import { command } from "@/shared/ipc/client"
 
@@ -42,5 +43,14 @@ export function useOpenInEditor() {
       if (launch.type === "terminal") client.invalidateQueries({ queryKey: agentKeys.terminals(input.worktreeId) })
     },
     onError: (error) => toast.error("Couldn't open editor", { description: String(error) }),
+  })
+}
+
+/** Writes an edited file; refused when it changed on disk since `base`. */
+export function useSaveSource() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (input: SaveSource) => command("save_source", { input }),
+    onSuccess: (_, input) => client.setQueryData(peekKeys.source(input.worktreeId, input.path), { path: input.path, content: input.content }),
   })
 }
