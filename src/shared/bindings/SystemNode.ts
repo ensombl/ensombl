@@ -23,4 +23,12 @@ symbolIds: Array<string>, file: string | null, line: number | null,
 /**
  * Written by the user (from `.crm/architecture.json`).
  */
-description: string | null, };
+description: string | null, 
+/**
+ * Hidden by the user; kept so it can be shown again.
+ */
+hidden: boolean, 
+/**
+ * Ids of the detected components merged into this one.
+ */
+merged: Array<string>, };

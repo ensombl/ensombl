@@ -8,6 +8,7 @@ use std::sync::{Arc, mpsc};
 
 use tauri::Manager;
 
+use application::commands::architecture::ArchitectureCommands;
 use application::commands::chats::{ChatCommands, ChatRegistry};
 use application::commands::indexing::{IndexingCommands, IndexingPorts, ReindexPaths};
 use application::commands::patterns::PatternCommands;
@@ -17,6 +18,7 @@ use application::commands::workspaces::WorkspaceCommands;
 use application::cqrs::CommandHandler;
 use application::index_registry::IndexRegistry;
 use application::ports::{AgentRuntime, ShellEnvironment, SourceScanner};
+use application::queries::architecture::ArchitectureQueries;
 use application::queries::chats::ChatQueries;
 use application::queries::get_app_info::GetAppInfoHandler;
 use application::queries::model::ModelQueries;
@@ -29,6 +31,7 @@ use infrastructure::build_info::CargoBuildInfo;
 use infrastructure::claude_stream::ClaudeCode;
 use infrastructure::fs_scanner::FsScanner;
 use infrastructure::git_cli::GitCli;
+use infrastructure::json_architecture::JsonArchitecture;
 use infrastructure::json_comments::{JsonComments, JsonSettings};
 use infrastructure::json_decisions::JsonDecisions;
 use infrastructure::json_sessions::JsonSessions;
@@ -123,6 +126,14 @@ pub fn run() {
                 workspace_queries: Arc::new(WorkspaceQueries::new(git, sessions.clone())),
                 indexing_commands: indexing,
                 model_queries: Arc::new(ModelQueries::new(registry.clone())),
+                architecture_commands: Arc::new(ArchitectureCommands::new(
+                    registry.clone(),
+                    Arc::new(JsonArchitecture),
+                )),
+                architecture_queries: Arc::new(ArchitectureQueries::new(
+                    registry.clone(),
+                    Arc::new(JsonArchitecture),
+                )),
                 pattern_commands: Arc::new(PatternCommands::new(
                     sessions.clone(),
                     decisions.clone(),
@@ -187,6 +198,12 @@ pub fn run() {
             cmd::write_terminal,
             cmd::resize_terminal,
             cmd::close_terminal,
+            cmd::get_system,
+            cmd::get_flow,
+            cmd::update_component,
+            cmd::merge_components,
+            cmd::split_component,
+            cmd::set_rule_enabled,
             cmd::list_chats,
             cmd::start_chat,
             cmd::attach_chat,

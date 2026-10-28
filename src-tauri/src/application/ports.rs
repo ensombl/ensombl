@@ -249,3 +249,15 @@ pub trait AgentRuntime: Send + Sync {
 pub trait ChatSink: Send + Sync {
     fn event(&self, event: &crate::domain::chat::ChatEvent);
 }
+
+// Architecture overrides
+
+/// The user's architecture corrections, kept in the worktree (`.crm/architecture.json`).
+pub trait ArchitectureStore: Send + Sync {
+    fn load(&self, root: &Path) -> crate::domain::system::overrides::ArchitectureFile;
+    fn save(
+        &self,
+        root: &Path,
+        file: &crate::domain::system::overrides::ArchitectureFile,
+    ) -> Result<()>;
+}

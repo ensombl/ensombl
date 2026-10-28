@@ -6,6 +6,9 @@ use std::sync::Arc;
 use tauri::State;
 use tauri::ipc::{Channel, InvokeResponseBody};
 
+use crate::application::commands::architecture::{
+    MergeComponents, SetRuleEnabled, SplitComponent, UpdateComponent,
+};
 use crate::application::commands::chats::{
     AttachChat, ChatSnapshot, CloseChat, InterruptChat, RespondPermission, SendChatMessage,
     SetChatModel, SetChatPermissionMode, StartChat, WithChatSink,
@@ -24,6 +27,7 @@ use crate::application::commands::workspaces::{
 };
 use crate::application::cqrs::{CommandHandler, QueryHandler};
 use crate::application::ports::Settings;
+use crate::application::queries::architecture::{GetFlow, GetSystem, SystemView};
 use crate::application::queries::chats::ListChats;
 use crate::application::queries::get_app_info::{AppInfo, GetAppInfo};
 use crate::application::queries::model::GetModel;
@@ -37,6 +41,7 @@ use crate::application::{Error, Result};
 use crate::domain::chat::{ChatEvent, ChatInfo};
 use crate::domain::model::ArchModel;
 use crate::domain::review::{AnchoredComment, ReviewComment};
+use crate::domain::system::flow::FlowStep;
 use crate::domain::terminal::TerminalInfo;
 use crate::domain::workspace::WorktreeId;
 
@@ -341,4 +346,39 @@ pub fn set_chat_model(handlers: State<'_, Handlers>, input: SetChatModel) -> Res
 #[tauri::command]
 pub fn close_chat(handlers: State<'_, Handlers>, input: CloseChat) -> Result<()> {
     handlers.chat_commands.handle(input)
+}
+
+// Architecture
+
+#[tauri::command]
+pub async fn get_system(
+    handlers: State<'_, Handlers>,
+    input: GetSystem,
+) -> Result<Option<SystemView>> {
+    blocking(&handlers.architecture_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn get_flow(handlers: State<'_, Handlers>, input: GetFlow) -> Result<Vec<FlowStep>> {
+    blocking(&handlers.architecture_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub fn update_component(handlers: State<'_, Handlers>, input: UpdateComponent) -> Result<()> {
+    handlers.architecture_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn merge_components(handlers: State<'_, Handlers>, input: MergeComponents) -> Result<String> {
+    handlers.architecture_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn split_component(handlers: State<'_, Handlers>, input: SplitComponent) -> Result<()> {
+    handlers.architecture_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn set_rule_enabled(handlers: State<'_, Handlers>, input: SetRuleEnabled) -> Result<()> {
+    handlers.architecture_commands.handle(input)
 }

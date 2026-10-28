@@ -294,6 +294,8 @@ impl<'a, R: Resolve> Builder<'a, R> {
             file: None,
             line: None,
             description: None,
+            hidden: false,
+            merged: vec![],
         });
         id
     }
@@ -330,6 +332,8 @@ impl<'a, R: Resolve> Builder<'a, R> {
                     file: Some(file.path.clone()),
                     line: Some(1),
                     description: None,
+                    hidden: false,
+                    merged: vec![],
                 },
                 true,
             );
@@ -443,6 +447,8 @@ impl<'a, R: Resolve> Builder<'a, R> {
                     file: Some(symbol.file.clone()),
                     line: Some(symbol.range.start_line),
                     description: None,
+                    hidden: false,
+                    merged: vec![],
                 },
                 tentative,
             );
