@@ -10,14 +10,14 @@ import type { SymbolNode } from "@/shared/bindings/SymbolNode"
 
 export interface ViewFilters {
   hideTests: boolean
+  /** Free functions and type aliases; off by default to keep the map about structure. */
+  showFunctions: boolean
   edgeKinds: EdgeKind[]
 }
 
 export interface ViewState {
   /** Expanded package/folder ids. */
   expanded: ReadonlySet<string>
-  /** Symbols showing their members. */
-  open: ReadonlySet<string>
   filters: ViewFilters
 }
 
@@ -31,7 +31,7 @@ export type ViewNode =
       expanded: boolean
       symbolCount: number
     }
-  | { type: "symbol"; id: string; parent?: string; symbol: SymbolNode; open: boolean }
+  | { type: "symbol"; id: string; parent?: string; symbol: SymbolNode }
 
 export interface ViewEdge {
   id: string
@@ -111,14 +111,19 @@ export function buildHierarchy(symbols: SymbolNode[]): Hierarchy {
   return { packages, ancestors }
 }
 
+const STRUCTURAL = new Set<SymbolNode["kind"]>(["class", "interface", "enum"])
+
 export function filterSymbols(model: ArchModel, filters: ViewFilters): SymbolNode[] {
-  return filters.hideTests ? model.symbols.filter((s) => !TEST_FILE.test(s.file)) : model.symbols
+  return model.symbols.filter(
+    (s) => (!filters.hideTests || !TEST_FILE.test(s.file)) && (filters.showFunctions || STRUCTURAL.has(s.kind)),
+  )
 }
 
 /** Small models start fully expanded; big ones start at package level. */
-export function defaultExpanded(model: ArchModel, threshold = 120): Set<string> {
-  if (model.symbols.length > threshold) return new Set()
-  const { packages } = buildHierarchy(model.symbols)
+export function defaultExpanded(model: ArchModel, filters: ViewFilters, threshold = 120): Set<string> {
+  const symbols = filterSymbols(model, filters)
+  if (symbols.length > threshold) return new Set()
+  const { packages } = buildHierarchy(symbols)
   const ids = new Set<string>()
   for (const [pkg, { folders }] of packages) {
     ids.add(packageId(pkg))
@@ -131,8 +136,8 @@ export function defaultExpanded(model: ArchModel, threshold = 120): Set<string> 
  * Expands one more level: all packages first, then all folders. Keeps huge
  * repos from exploding into thousands of nodes in a single click.
  */
-export function expandOneLevel(model: ArchModel, expanded: ReadonlySet<string>): Set<string> {
-  const { packages } = buildHierarchy(model.symbols)
+export function expandOneLevel(model: ArchModel, filters: ViewFilters, expanded: ReadonlySet<string>): Set<string> {
+  const { packages } = buildHierarchy(filterSymbols(model, filters))
   const packageIds = [...packages.keys()].map(packageId)
   const next = new Set(expanded)
   if (packageIds.some((id) => !expanded.has(id))) {
@@ -181,7 +186,7 @@ export function buildView(model: ArchModel, state: ViewState): DiagramView {
         visibleOf.set(s.id, folder)
         continue
       }
-      nodes.push({ type: "symbol", id: s.id, parent: folder ?? pid, symbol: s, open: state.open.has(s.id) })
+      nodes.push({ type: "symbol", id: s.id, parent: folder ?? pid, symbol: s })
       visibleOf.set(s.id, s.id)
     }
   }

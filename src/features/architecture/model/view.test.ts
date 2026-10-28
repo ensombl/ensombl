@@ -39,10 +39,11 @@ const model: ArchModel = {
   ],
 }
 
+const filters = { hideTests: false, showFunctions: true, edgeKinds: ALL_EDGE_KINDS }
+
 const state = (expanded: string[], extra: Partial<ViewState> = {}): ViewState => ({
   expanded: new Set(expanded),
-  open: new Set(),
-  filters: { hideTests: false, edgeKinds: ALL_EDGE_KINDS },
+  filters,
   ...extra,
 })
 
@@ -77,22 +78,32 @@ describe("buildView", () => {
 
   it("filters test files and edge kinds", () => {
     const expanded = [packageId("api"), folderId("api", "packages/api/src/db")]
-    const view = buildView(model, state(expanded, { filters: { hideTests: true, edgeKinds: ["association"] } }))
+    const view = buildView(model, state(expanded, { filters: { hideTests: true, showFunctions: true, edgeKinds: ["association"] } }))
     expect(view.nodes.some((n) => n.id.endsWith("#DbTest"))).toBe(false)
     expect(view.edges.every((e) => e.kind === "aggregate" || e.kind === "association")).toBe(true)
   })
 })
 
+describe("symbol filters", () => {
+  it("hides free functions and type aliases unless asked", () => {
+    const withFn: ArchModel = { ...model, symbols: [...model.symbols, { ...sym("packages/ui/src/util.ts", "helper", "ui"), kind: "function" }] }
+    const hidden = buildView(withFn, state([packageId("ui")], { filters: { ...filters, showFunctions: false } }))
+    expect(hidden.nodes.some((n) => n.id.endsWith("#helper"))).toBe(false)
+    const shown = buildView(withFn, state([packageId("ui")]))
+    expect(shown.nodes.some((n) => n.id.endsWith("#helper"))).toBe(true)
+  })
+})
+
 describe("helpers", () => {
   it("expands small models by default", () => {
-    expect(defaultExpanded(model).has(packageId("api"))).toBe(true)
-    expect(defaultExpanded(model, 2).size).toBe(0)
+    expect(defaultExpanded(model, filters).has(packageId("api"))).toBe(true)
+    expect(defaultExpanded(model, filters, 2).size).toBe(0)
   })
 
   it("expands packages first, then folders", () => {
-    const first = expandOneLevel(model, new Set())
+    const first = expandOneLevel(model, filters, new Set())
     expect([...first].sort()).toEqual([packageId("api"), packageId("ui")])
-    const second = expandOneLevel(model, first)
+    const second = expandOneLevel(model, filters, first)
     expect(second.has(folderId("api", "packages/api/src/db"))).toBe(true)
   })
 

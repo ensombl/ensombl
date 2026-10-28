@@ -5,6 +5,7 @@ import {
   Controls,
   MiniMap,
   Panel,
+  PanOnScrollMode,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -14,10 +15,11 @@ import {
 import type { ArchModel } from "@/shared/bindings/ArchModel"
 import { useIsActiveWorkspace } from "@/shared/workspace/workspace-context"
 
-import { flattenLayout, toElkGraph, type LaidOutNode } from "../../layout/elk-graph"
+import { flattenLayout, toElkGraph, type Layout } from "../../layout/elk-graph"
 import { runLayout } from "../../layout/run-layout"
 import { useDiagram } from "../../model/diagram-store"
 import { ancestorsOf, buildView, defaultExpanded, expandOneLevel } from "../../model/view"
+import { SymbolInspector } from "../inspector/symbol-inspector"
 import { DiagramToolbar } from "./diagram-toolbar"
 import { GroupNodeComponent, type GroupFlowNode } from "./group-node"
 import { SymbolNodeComponent, type SymbolFlowNode } from "./symbol-node"
@@ -29,29 +31,28 @@ const edgeTypes = { uml: UmlEdgeComponent }
 
 function Canvas({ model }: { model: ArchModel }) {
   const diagram = useDiagram()
-  const { state } = diagram
+  const { state, init, clearFocus, select } = diagram
   const active = useIsActiveWorkspace()
   const flow = useReactFlow()
-  const [layout, setLayout] = useState<Map<string, LaidOutNode> | null>(null)
-  const [selected, setSelected] = useState<string | null>(null)
+  const [layout, setLayout] = useState<{ layout: Layout; routed: Set<string> } | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const fitted = useRef(false)
 
-  const { init } = diagram
   useEffect(() => {
-    if (!state.initialized) init(defaultExpanded(model))
-  }, [state.initialized, init, model])
+    if (!state.initialized) init(defaultExpanded(model, state.filters))
+  }, [state.initialized, state.filters, init, model])
 
   const view = useMemo(
-    () => buildView(model, { expanded: state.expanded, open: state.open, filters: state.filters }),
-    [model, state.expanded, state.open, state.filters],
+    () => buildView(model, { expanded: state.expanded, filters: state.filters }),
+    [model, state.expanded, state.filters],
   )
 
   useEffect(() => {
     let cancelled = false
-    runLayout(toElkGraph(view))
+    const { graph, routed } = toElkGraph(view)
+    runLayout(graph)
       .then((result) => {
-        if (!cancelled) setLayout(flattenLayout(result))
+        if (!cancelled) setLayout({ layout: flattenLayout(result), routed })
       })
       .catch((error) => console.error("layout failed", error))
     return () => {
@@ -59,17 +60,19 @@ function Canvas({ model }: { model: ArchModel }) {
     }
   }, [view])
 
+  const selected = state.selected
   const nodes = useMemo<Node[]>(() => {
     if (!layout) return []
+    const boxes = layout.layout.nodes
     return view.nodes.flatMap((n): Node[] => {
-      const box = layout.get(n.id)
+      const box = boxes.get(n.id)
       if (!box) return []
       const base = {
         id: n.id,
         position: { x: box.x, y: box.y },
         width: box.width,
         height: box.height,
-        parentId: n.parent && layout.has(n.parent) ? n.parent : undefined,
+        parentId: n.parent && boxes.has(n.parent) ? n.parent : undefined,
         selected: n.id === selected,
       }
       if (n.type === "group") {
@@ -82,87 +85,110 @@ function Canvas({ model }: { model: ArchModel }) {
         }
         return [node]
       }
-      const node: SymbolFlowNode = { ...base, type: "symbol", data: { symbol: n.symbol, open: n.open } }
+      const node: SymbolFlowNode = { ...base, type: "symbol", data: { symbol: n.symbol } }
       return [node]
     })
   }, [view, layout, selected])
 
-  const edges = useMemo<UmlFlowEdge[]>(
-    () =>
-      layout
-        ? view.edges
-            .filter((e) => layout.has(e.source) && layout.has(e.target))
-            .map((e) => {
-              const highlighted = selected !== null && (e.source === selected || e.target === selected)
-              return {
-                id: e.id,
-                source: e.source,
-                target: e.target,
-                type: "uml",
-                zIndex: highlighted ? 10 : 1,
-                data: { kind: e.kind, count: e.count, highlighted },
-              }
-            })
-        : [],
-    [view, layout, selected],
-  )
+  const edges = useMemo<UmlFlowEdge[]>(() => {
+    if (!layout) return []
+    const { nodes: boxes, routes } = layout.layout
+    return view.edges
+      .filter((e) => boxes.has(e.source) && boxes.has(e.target))
+      .map((e) => {
+        const touches = e.source === selected || e.target === selected
+        return {
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          type: "uml",
+          zIndex: touches ? 10 : 1,
+          data: {
+            kind: e.kind,
+            count: e.count,
+            highlighted: touches,
+            dimmed: selected !== null && !touches,
+            points: layout.routed.has(e.id) ? routes.get(e.id) : undefined,
+          },
+        }
+      })
+  }, [view, layout, selected])
 
-  // First layout: fit everything. Later: center on a symbol revealed from search.
-  const { clearFocus } = diagram
+  // First layout: fit everything. Later: center on a revealed symbol.
   useEffect(() => {
     if (!layout) return
     if (!fitted.current) {
       fitted.current = true
-      requestAnimationFrame(() => flow.fitView({ padding: 0.15, maxZoom: 1 }))
+      requestAnimationFrame(() => flow.fitView({ padding: 0.12, maxZoom: 1 }))
     }
-    if (state.focus && layout.has(state.focus)) {
+    if (state.focus && layout.layout.nodes.has(state.focus)) {
       const id = state.focus
       clearFocus()
-      requestAnimationFrame(() => {
-        setSelected(id)
-        flow.fitView({ nodes: [{ id }], duration: 500, maxZoom: 1.1, padding: 0.4 })
-      })
+      requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], duration: 500, maxZoom: 1.2, padding: 0.6 }))
     }
   }, [layout, flow, state.focus, clearFocus])
 
   const reveal = useCallback(
-    (symbolId: string) => diagram.reveal(symbolId, ancestorsOf(model, symbolId)),
+    (symbolId: string) => {
+      const kind = model.symbols.find((s) => s.id === symbolId)?.kind
+      diagram.reveal(symbolId, ancestorsOf(model, symbolId), kind === "function" || kind === "typeAlias")
+    },
     [diagram, model],
   )
 
+  const selectedSymbol = useMemo(
+    () => (selected ? model.symbols.find((s) => s.id === selected) : undefined),
+    [model, selected],
+  )
+
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      colorMode="dark"
-      minZoom={0.05}
-      maxZoom={2}
-      nodesConnectable={false}
-      nodesDraggable={false}
-      onNodeClick={(_, node) => setSelected(node.id)}
-      onPaneClick={() => setSelected(null)}
-      proOptions={{ hideAttribution: true }}
-      onlyRenderVisibleElements
-    >
-      <UmlMarkers />
-      <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-      <Panel position="top-left">
-        <DiagramToolbar
-          edgeKinds={state.filters.edgeKinds}
-          hideTests={state.filters.hideTests}
-          onSearch={() => setSearchOpen(true)}
-          onEdgeKinds={diagram.setEdgeKinds}
-          onHideTests={diagram.setHideTests}
-          onExpandAll={() => diagram.expandAll([...expandOneLevel(model, state.expanded)])}
-          onCollapseAll={diagram.collapseAll}
-        />
-      </Panel>
-      <Controls showInteractive={false} position="bottom-left" />
-      <MiniMap pannable zoomable position="bottom-right" nodeStrokeWidth={2} />
+    <div className="flex h-full">
+      <div className="relative min-w-0 flex-1">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          colorMode="dark"
+          minZoom={0.05}
+          maxZoom={2}
+          nodesConnectable={false}
+          nodesDraggable={false}
+          // Trackpad: two-finger scroll pans, pinch zooms.
+          panOnScroll
+          panOnScrollMode={PanOnScrollMode.Free}
+          zoomOnScroll={false}
+          zoomOnPinch
+          zoomOnDoubleClick={false}
+          onNodeClick={(_, node) => node.type === "symbol" && select(node.id)}
+          onPaneClick={() => select(null)}
+          proOptions={{ hideAttribution: true }}
+          onlyRenderVisibleElements
+        >
+          <UmlMarkers />
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+          <Panel position="top-left">
+            <DiagramToolbar
+              edgeKinds={state.filters.edgeKinds}
+              hideTests={state.filters.hideTests}
+              showFunctions={state.filters.showFunctions}
+              onSearch={() => setSearchOpen(true)}
+              onEdgeKinds={diagram.setEdgeKinds}
+              onHideTests={(hideTests) => diagram.setFilters({ hideTests })}
+              onShowFunctions={(showFunctions) => diagram.setFilters({ showFunctions })}
+              onExpandAll={() => diagram.setExpanded(expandOneLevel(model, state.filters, state.expanded))}
+              onCollapseAll={diagram.collapseAll}
+            />
+          </Panel>
+          <Controls showInteractive={false} position="bottom-left" />
+          <MiniMap pannable zoomable position="bottom-right" nodeStrokeWidth={2} />
+        </ReactFlow>
+      </div>
+      {selectedSymbol && (
+        <SymbolInspector model={model} symbol={selectedSymbol} onNavigate={reveal} onClose={() => select(null)} />
+      )}
       <SymbolSearch model={model} open={searchOpen} onOpenChange={setSearchOpen} onSelect={reveal} listen={active} />
-    </ReactFlow>
+    </div>
   )
 }
 

@@ -1,4 +1,4 @@
-import { ChevronsDownUp, ChevronsUpDown, FlaskConical, Search } from "lucide-react"
+import { ChevronsDownUp, ChevronsUpDown, FlaskConical, FunctionSquare, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -17,9 +17,11 @@ const EDGE_KINDS: { kind: EdgeKind; label: string; hint: string }[] = [
 interface DiagramToolbarProps {
   edgeKinds: EdgeKind[]
   hideTests: boolean
+  showFunctions: boolean
   onSearch: () => void
   onEdgeKinds: (kinds: EdgeKind[]) => void
   onHideTests: (hide: boolean) => void
+  onShowFunctions: (show: boolean) => void
   onExpandAll: () => void
   onCollapseAll: () => void
 }
@@ -53,6 +55,11 @@ export function DiagramToolbar(props: DiagramToolbarProps) {
         <FlaskConical className="size-3.5 text-muted-foreground" />
         Hide tests
         <Switch checked={props.hideTests} onCheckedChange={props.onHideTests} />
+      </Label>
+      <Label className="flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs font-normal">
+        <FunctionSquare className="size-3.5 text-muted-foreground" />
+        Functions &amp; types
+        <Switch checked={props.showFunctions} onCheckedChange={props.onShowFunctions} />
       </Label>
       <Tooltip>
         <TooltipTrigger asChild>
