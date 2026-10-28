@@ -14,8 +14,12 @@ pub struct ReviewComment {
     pub file: String,
     /// 1-based line the comment was written on (updated when re-anchored).
     pub line: u32,
+    /// Last line of a multi-line comment; it moves with `line`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub end_line: Option<u32>,
     pub body: String,
-    /// Trimmed text of the commented line when the comment was made.
+    /// Trimmed text of the commented (first) line when the comment was made.
     pub anchor: String,
     pub resolved: bool,
     /// Unix millis.
@@ -64,6 +68,7 @@ mod tests {
             id: "c1".into(),
             file: "a.ts".into(),
             line,
+            end_line: None,
             body: "rename this".into(),
             anchor: anchor.into(),
             resolved: false,

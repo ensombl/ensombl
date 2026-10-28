@@ -26,6 +26,9 @@ pub struct AddComment {
     pub worktree_id: WorktreeId,
     pub file: String,
     pub line: u32,
+    /// Last line, for a comment on a range of lines.
+    #[ts(optional)]
+    pub end_line: Option<u32>,
     pub body: String,
 }
 
@@ -202,11 +205,24 @@ impl CommandHandler<AddComment> for ReviewCommands {
             .ok_or_else(|| Error::Invalid(format!("{} has no line {}", cmd.file, cmd.line)))?
             .trim()
             .to_string();
+        let end_line = match cmd.end_line {
+            Some(end) if end < cmd.line => {
+                return Err(Error::Invalid(
+                    "a comment can't end before it starts".into(),
+                ));
+            }
+            Some(end) if end as usize > source.lines().count() => {
+                return Err(Error::Invalid(format!("{} has no line {end}", cmd.file)));
+            }
+            Some(end) if end > cmd.line => Some(end),
+            _ => None,
+        };
         let created_at = now_millis();
         let comment = ReviewComment {
             id: format!("c{created_at:x}{:x}", cmd.line),
             file: cmd.file,
             line: cmd.line,
+            end_line,
             body: body.into(),
             anchor,
             resolved: false,

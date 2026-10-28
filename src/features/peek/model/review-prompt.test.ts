@@ -15,6 +15,16 @@ describe("reviewPrompt", () => {
     expect(out).toBe("Please address these review comments:\n\n1. @src/a.ts:5\n   > return x\n   handle null")
   })
 
+  it("quotes every line of a multi-line comment", () => {
+    const item: AnchoredComment = {
+      comment: { id: "1", file: "src/a.ts", line: 2, endLine: 3, body: "merge these", anchor: "b", resolved: false, createdAt: 0 },
+      currentLine: 4,
+    }
+    expect(reviewPrompt([item], { "src/a.ts": "x\nx\nx\na\nb\n" })).toBe(
+      "Please address these review comments:\n\n1. @src/a.ts:4-5\n   > a\n   > b\n   merge these",
+    )
+  })
+
   it("flags comments whose code moved away", () => {
     expect(reviewPrompt([comment("1", null, "x")])).toContain("@src/a.ts (code has changed since)")
   })
