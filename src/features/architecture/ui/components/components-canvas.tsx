@@ -19,6 +19,7 @@ import type { SystemView } from "@/shared/bindings/SystemView"
 import { useIsActiveWorkspace, useWorkspace } from "@/shared/workspace/workspace-context"
 
 import { useArchitectureCommands } from "../../commands/architecture-commands"
+import { layoutCache } from "../../layout/layout-cache"
 import { runLayout } from "../../layout/run-layout"
 import { flattenLayout, lanesOf, systemLayoutSignature, toSystemElk, type Layout } from "../../layout/system-layout"
 import { useChanges } from "../../model/changes-store"
@@ -41,13 +42,15 @@ import {
 import { SystemMarkers } from "./system-style"
 import { sideHandles } from "../../layout/handles"
 
+const layouts = layoutCache<Layout>()
+
 const nodeTypes = { component: ComponentNodeView, feature: FeatureNodeView, lane: LaneNodeView, package: PackageNodeView }
 const edgeTypes = { system: SystemEdgeView }
 
 /** Above this many edges, unhighlighted ones are drawn faintly. */
 const BUSY_EDGES = 40
 /** Viewport culling kicks in above this many nodes. */
-const CULL_ABOVE = 150
+const CULL_ABOVE = 1000
 
 interface CanvasProps {
   system: SystemView
@@ -62,7 +65,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
   const { focus, selected, filters } = ui.state
   const flow = useReactFlow()
   const commands = useArchitectureCommands(worktree.id)
-  const [layout, setLayout] = useState<Layout | null>(null)
+  const [computed, setLayout] = useState<Layout | null>(null)
   const [multi, setMulti] = useState<string[]>([])
   const [mergeName, setMergeName] = useState("")
   const [searchOpen, setSearchOpen] = useState(false)
@@ -83,13 +86,22 @@ function Canvas({ system, onShowCode }: CanvasProps) {
     latest.current = view
   })
 
+  // A cached layout for this structure is used right away; otherwise ELK runs.
+  const layout = layouts.get(signature) ?? computed
   useEffect(() => {
     let cancelled = false
+    const fit = () => requestAnimationFrame(() => flow.fitView({ padding: 0.1, maxZoom: 1, duration: 300 }))
+    if (layouts.get(signature)) {
+      fit()
+      return
+    }
     runLayout(toSystemElk(latest.current))
       .then((result) => {
         if (cancelled) return
-        setLayout(flattenLayout(result))
-        requestAnimationFrame(() => flow.fitView({ padding: 0.1, maxZoom: 1, duration: 300 }))
+        const next = flattenLayout(result)
+        layouts.set(signature, next)
+        setLayout(next)
+        fit()
       })
       .catch((error) => console.error("layout failed", error))
     return () => {

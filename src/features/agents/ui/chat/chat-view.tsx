@@ -30,6 +30,8 @@ type Action = { type: "reset"; events: ChatEvent[] } | { type: "events"; events:
 const reducer = (state: ReturnType<typeof emptyChat>, action: Action) =>
   action.type === "reset" ? reduceAll(action.events) : reduceAll(action.events, state)
 
+const FLUSH_MS = 80
+
 const CONTEXT_MARKER = "\n\n<architecture-context"
 
 function UserMessage({ text }: { text: string }) {
@@ -121,11 +123,12 @@ export function ChatView({ chat, visible, model, patterns, onRestart, onClose }:
   const atBottom = useRef(true)
   const [attached, setAttached] = useState(false)
 
-  // Events arrive in bursts while text streams; apply them once per frame.
+  // Events arrive in bursts while text streams; apply them in batches. Every
+  // frame would re-parse the growing markdown ~60 times a second.
   useEffect(() => {
     let disposed = false
     let queue: ChatEvent[] = []
-    let frame = 0
+    let frame: ReturnType<typeof setTimeout> | 0 = 0
     const flush = () => {
       frame = 0
       if (disposed || queue.length === 0) return
@@ -136,7 +139,7 @@ export function ChatView({ chat, visible, model, patterns, onRestart, onClose }:
     let ready = false
     attachChat(chat.id, (event) => {
       queue.push(event)
-      if (ready && !frame) frame = requestAnimationFrame(flush)
+      if (ready && !frame) frame = setTimeout(flush, FLUSH_MS)
     })
       .then((snapshot) => {
         if (disposed) return
@@ -148,7 +151,7 @@ export function ChatView({ chat, visible, model, patterns, onRestart, onClose }:
       .catch((error) => toast.error("Couldn't open chat", { description: String(error) }))
     return () => {
       disposed = true
-      cancelAnimationFrame(frame)
+      clearTimeout(frame)
     }
   }, [chat.id])
 

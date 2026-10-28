@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 
 import type { ArchModel } from "@/shared/bindings/ArchModel"
@@ -11,6 +11,8 @@ import { applyDelta } from "./apply-delta"
 import { useChangesStore } from "./changes-store"
 import { modelKeys, useModel } from "../queries/model-queries"
 import { systemKeys } from "../queries/system-queries"
+
+const SYSTEM_REFETCH_DELAY = 1000
 
 /**
  * Keeps a worktree indexed while its tab is mounted: indexes on mount, follows
@@ -36,10 +38,14 @@ export function useWorktreeIndex(worktreeId: string) {
   })
 
   const markChanged = useChangesStore((s) => s.mark)
+  // Agents save files in bursts; refetch the (large) system view once things settle.
+  const systemRefetch = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(systemRefetch.current), [])
   useBackendEvent<ModelUpdated>("index://updated", (u) => {
     if (u.worktreeId !== worktreeId) return
-    // The system view is derived on the backend; just refetch it.
-    client.invalidateQueries({ queryKey: systemKeys.system(worktreeId) })
+    // The system view is derived on the backend; refetch it after a quiet moment.
+    clearTimeout(systemRefetch.current)
+    systemRefetch.current = setTimeout(() => client.invalidateQueries({ queryKey: systemKeys.system(worktreeId) }), SYSTEM_REFETCH_DELAY)
     const key = modelKeys.model(worktreeId)
     const current = client.getQueryData<ArchModel | null>(key)
     if (!u.delta || !current) {
