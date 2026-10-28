@@ -142,3 +142,83 @@ async fn stream(mut socket: WebSocket, mut rx: broadcast::Receiver<BusEvent>) {
         }
     }
 }
+
+/// Where a running instance's API can be reached, written to a file so local
+/// tools can find it.
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct LocalApi {
+    pub url: String,
+    pub token: String,
+}
+
+impl LocalApi {
+    pub fn read(file: &std::path::Path) -> std::io::Result<LocalApi> {
+        let text = std::fs::read_to_string(file)?;
+        serde_json::from_str(&text).map_err(std::io::Error::other)
+    }
+}
+
+fn random_token() -> std::io::Result<String> {
+    let mut bytes = [0u8; 24];
+    getrandom::fill(&mut bytes).map_err(std::io::Error::other)?;
+    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Serves the API on a free localhost port from its own thread and writes
+/// where to `file` (readable only by the user). For the desktop app.
+pub fn spawn_local(
+    handlers: Arc<Handlers>,
+    bus: &BroadcastBus,
+    file: &std::path::Path,
+) -> std::io::Result<LocalApi> {
+    let token = random_token()?;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    listener.set_nonblocking(true)?;
+    let api = LocalApi {
+        url: format!("http://{}", listener.local_addr()?),
+        token: token.clone(),
+    };
+    write_private(
+        file,
+        &serde_json::to_string_pretty(&api).map_err(std::io::Error::other)?,
+    )?;
+    let app = router(handlers, bus, Some(token));
+    std::thread::Builder::new()
+        .name("local-api".into())
+        .spawn(move || {
+            let runtime = match tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+            {
+                Ok(rt) => rt,
+                Err(e) => return eprintln!("local API: {e}"),
+            };
+            runtime.block_on(async move {
+                match tokio::net::TcpListener::from_std(listener) {
+                    Ok(listener) => {
+                        if let Err(e) = axum::serve(listener, app).await {
+                            eprintln!("local API: {e}");
+                        }
+                    }
+                    Err(e) => eprintln!("local API: {e}"),
+                }
+            });
+        })?;
+    Ok(api)
+}
+
+fn write_private(file: &std::path::Path, text: &str) -> std::io::Result<()> {
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    use std::io::Write;
+    options.open(file)?.write_all(text.as_bytes())
+}
