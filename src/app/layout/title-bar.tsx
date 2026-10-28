@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
-import { Boxes } from "lucide-react"
 
+import logo from "@/assets/logo.png"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
@@ -19,9 +19,7 @@ export function TitleBar({ version, children }: { version?: string; children?: R
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Boxes className="size-3.5" />
-          </div>
+          <img src={logo} alt="CRM" className="size-7 shrink-0" draggable={false} />
         </TooltipTrigger>
         <TooltipContent>CRM: Clanker Resource Management</TooltipContent>
       </Tooltip>

@@ -178,3 +178,12 @@
 @media (prefers-reduced-motion: reduce) {
   .crm-shimmer { animation: none; }
 }
+
+/*
+ * Background tabs stay mounted with visibility:hidden so terminals keep their
+ * size, but React Flow forces visibility:visible on its nodes. Hide everything.
+ */
+[data-inactive],
+[data-inactive] * {
+  visibility: hidden !important;
+}
