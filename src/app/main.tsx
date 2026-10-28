@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client"
 import { App } from "./app"
 import { Providers } from "./providers"
 import "@xyflow/react/dist/style.css"
+import "@xterm/xterm/css/xterm.css"
 import "@/styles.css"
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
