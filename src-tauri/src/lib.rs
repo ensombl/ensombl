@@ -186,6 +186,7 @@ pub fn run() {
             cmd::get_patterns,
             cmd::set_pattern_decision,
             cmd::read_source,
+            cmd::save_source,
             cmd::list_comments,
             cmd::get_settings,
             cmd::add_comment,

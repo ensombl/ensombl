@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react"
+import { memo, useCallback, useMemo, useState } from "react"
 import { ChevronRight, FileCode2, Folder, FolderOpen, Loader2, RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -8,22 +8,24 @@ import { cn } from "@/lib/utils"
 import { PaneEmpty } from "@/shared/ui/pane"
 import { useWorkspace } from "@/shared/workspace/workspace-context"
 
-import { PeekPanel } from "@/features/peek/ui/peek-panel"
-
+import { draftKey, useDraftsStore } from "../../model/drafts-store"
 import { ancestorDirs, buildFileTree, searchFiles, type FileTreeNode } from "../../model/file-tree"
 import { useSystemUi } from "../../model/system-store"
 import { useFiles } from "../../queries/system-queries"
+import { CodeEditor } from "./code-editor"
 
 interface TreeProps {
   nodes: FileTreeNode[]
   depth: number
   open: Set<string>
   selected: string | null
+  /** Files with unsaved edits. */
+  dirty: (path: string) => boolean
   onToggle: (path: string) => void
   onSelect: (path: string) => void
 }
 
-const Tree = memo(function Tree({ nodes, depth, open, selected, onToggle, onSelect }: TreeProps) {
+const Tree = memo(function Tree({ nodes, depth, open, selected, dirty, onToggle, onSelect }: TreeProps) {
   return (
     <>
       {nodes.map((n) => {
@@ -49,9 +51,10 @@ const Tree = memo(function Tree({ nodes, depth, open, selected, onToggle, onSele
                 <FileCode2 className="ml-4 size-3.5 shrink-0 text-muted-foreground" />
               )}
               <span className="truncate">{n.name}</span>
+              {!n.children && dirty(n.path) && <span className="ml-auto size-1.5 shrink-0 rounded-full bg-foreground" title="Unsaved changes" />}
             </button>
             {n.children && isOpen && (
-              <Tree nodes={n.children} depth={depth + 1} open={open} selected={selected} onToggle={onToggle} onSelect={onSelect} />
+              <Tree nodes={n.children} depth={depth + 1} open={open} selected={selected} dirty={dirty} onToggle={onToggle} onSelect={onSelect} />
             )}
           </div>
         )
@@ -60,17 +63,26 @@ const Tree = memo(function Tree({ nodes, depth, open, selected, onToggle, onSele
   )
 })
 
-/** A small file explorer: browse or filter the worktree, read a file next to it. */
-export function FilesView() {
+/** The worktree's files: browse or filter, then edit one in place. */
+export function CodeExplorer() {
   const worktree = useWorkspace()
   const ui = useSystemUi()
-  const selected = ui.state.file
+  const { file: selected, line } = ui.state
   // Listed the first time the tab is opened, not on every worktree load.
-  const files = useFiles(worktree.id, ui.state.tab === "files")
+  const files = useFiles(worktree.id, ui.state.tab === "code")
+  const dirty = useDraftsStore((s) => s.dirty)
+  const isDirty = useCallback((path: string) => !!dirty[draftKey(worktree.id, path)], [dirty, worktree.id])
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState<Set<string>>(() => new Set(selected ? ancestorDirs(selected) : []))
   const tree = useMemo(() => buildFileTree(files.data ?? []), [files.data])
   const matches = useMemo(() => searchFiles(files.data ?? [], query), [files.data, query])
+
+  // Opened from elsewhere too (the component inspector): show where it lives.
+  const [shown, setShown] = useState(selected)
+  if (selected !== shown) {
+    setShown(selected)
+    if (selected) setOpen((prev) => new Set([...prev, ...ancestorDirs(selected)]))
+  }
 
   const toggle = (path: string) =>
     setOpen((prev) => {
@@ -79,10 +91,7 @@ export function FilesView() {
       else next.add(path)
       return next
     })
-  const select = (path: string) => {
-    ui.openFile(path)
-    setOpen((prev) => new Set([...prev, ...ancestorDirs(path)]))
-  }
+  const select = (path: string) => ui.openFile(path)
 
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-full">
@@ -112,18 +121,14 @@ export function FilesView() {
               ))
             )
           ) : (
-            <Tree nodes={tree} depth={0} open={open} selected={selected} onToggle={toggle} onSelect={select} />
+            <Tree nodes={tree} depth={0} open={open} selected={selected} dirty={isDirty} onToggle={toggle} onSelect={select} />
           )}
         </div>
       </ResizablePanel>
       <ResizableHandle />
       <ResizablePanel id="file-view" minSize="30" className="min-w-0">
         {selected ? (
-          <PeekPanel
-            key={selected}
-            target={{ file: selected, line: 1, title: selected.slice(selected.lastIndexOf("/") + 1) }}
-            onClose={() => ui.openFile(null)}
-          />
+          <CodeEditor key={selected} path={selected} line={line} onClose={() => ui.openFile(null)} />
         ) : (
           <PaneEmpty icon={<FileCode2 />} title="Pick a file" description={`${files.data?.length ?? 0} files in this worktree`} />
         )}

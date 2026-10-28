@@ -46,7 +46,7 @@ function Canvas({ model }: { model: ArchModel }) {
   const workspaceActive = useIsActiveWorkspace()
   const tab = useSystemUi().state.tab
   // ⌘K belongs to whichever lens is showing.
-  const active = workspaceActive && tab === "code"
+  const active = workspaceActive && tab === "classes"
   const flow = useReactFlow()
   const [computed, setLayout] = useState<{ layout: Layout; routed: Set<string> } | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)

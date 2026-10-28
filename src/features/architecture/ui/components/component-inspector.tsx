@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react"
-import { ChevronRight, Code2, DoorOpen, Eye, EyeOff, RotateCcw, Split, X } from "lucide-react"
+import { Boxes, ChevronRight, Code2, DoorOpen, Eye, EyeOff, RotateCcw, Split, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -96,12 +96,12 @@ interface ComponentInspectorProps {
   system: SystemView
   node: SystemNode
   onNavigate: (id: string) => void
-  onShowCode: (symbolId: string) => void
+  onShowClasses: (symbolId: string) => void
   onClose: () => void
 }
 
 /** Details of one component; edits are saved to `.crm/architecture.json`. */
-export function ComponentInspector({ system, node, onNavigate, onShowCode, onClose }: ComponentInspectorProps) {
+export function ComponentInspector({ system, node, onNavigate, onShowClasses, onClose }: ComponentInspectorProps) {
   const worktree = useWorkspace()
   const openPeek = usePeekStore((s) => s.open)
   const ui = useSystemUi()
@@ -195,9 +195,14 @@ export function ComponentInspector({ system, node, onNavigate, onShowCode, onClo
             </Section>
 
             <div className="flex flex-wrap gap-1.5">
-              {node.symbolIds.length > 0 && (
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onShowCode(node.symbolIds[0])}>
+              {node.file && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => ui.showFile(node.file!, node.line ?? 1)}>
                   <Code2 /> Show code
+                </Button>
+              )}
+              {node.symbolIds.length > 0 && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onShowClasses(node.symbolIds[0])}>
+                  <Boxes /> Show classes
                 </Button>
               )}
               {editable && (

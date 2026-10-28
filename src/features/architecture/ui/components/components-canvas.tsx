@@ -54,10 +54,10 @@ const CULL_ABOVE = 1000
 
 interface CanvasProps {
   system: SystemView
-  onShowCode: (symbolId: string) => void
+  onShowClasses: (symbolId: string) => void
 }
 
-function Canvas({ system, onShowCode }: CanvasProps) {
+function Canvas({ system, onShowClasses }: CanvasProps) {
   const { model } = system
   const worktree = useWorkspace()
   const active = useIsActiveWorkspace()
@@ -347,7 +347,7 @@ function Canvas({ system, onShowCode }: CanvasProps) {
               }
               ui.select(id)
             }}
-            onShowCode={onShowCode}
+            onShowClasses={onShowClasses}
             onClose={() => ui.select(null)}
           />
         )}

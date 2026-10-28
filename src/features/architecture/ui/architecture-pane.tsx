@@ -1,4 +1,4 @@
-import { Code2, FolderTree, Loader2, Network, RefreshCw, Route, ShieldCheck, Waypoints } from "lucide-react"
+import { Boxes, Code2, Loader2, Network, RefreshCw, Route, ShieldCheck, Waypoints } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -16,15 +16,15 @@ import { useSystem } from "../queries/system-queries"
 import { ComponentsCanvas } from "./components/components-canvas"
 import { BoundariesView } from "./boundaries/boundaries-view"
 import { DiagramCanvas } from "./diagram/diagram-canvas"
-import { FilesView } from "./files/files-view"
+import { CodeExplorer } from "./code/code-explorer"
 import { FlowsView } from "./flows/flows-view"
 
 const TABS: { value: ArchitectureTab; label: string; icon: typeof Network }[] = [
   { value: "components", label: "Components", icon: Waypoints },
   { value: "flows", label: "Flows", icon: Route },
   { value: "boundaries", label: "Boundaries", icon: ShieldCheck },
+  { value: "classes", label: "Classes", icon: Boxes },
   { value: "code", label: "Code", icon: Code2 },
-  { value: "files", label: "Files", icon: FolderTree },
 ]
 
 function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string }) {
@@ -34,10 +34,10 @@ function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string })
   const { data: system } = useSystem(worktreeId)
   if (!active) return null
 
-  const showCode = (symbolId: string) => {
+  const showClasses = (symbolId: string) => {
     const kind = model.symbols.find((s) => s.id === symbolId)?.kind
     diagram.reveal(symbolId, ancestorsOf(model, symbolId), kind === "function" || kind === "typeAlias")
-    ui.setTab("code")
+    ui.setTab("classes")
   }
 
   return (
@@ -50,7 +50,7 @@ function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string })
       <TabsContent value="components" className="min-h-0 flex-1">
         {system ? (
           <ErrorBoundary resetKey={system}>
-            <ComponentsCanvas system={system} onShowCode={showCode} />
+            <ComponentsCanvas system={system} onShowClasses={showClasses} />
           </ErrorBoundary>
         ) : (
           <PaneEmpty icon={<Loader2 className="animate-spin" />} title="Working out the architecture…" description="Finding components and how they talk" />
@@ -70,14 +70,14 @@ function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string })
           </ErrorBoundary>
         )}
       </TabsContent>
-      <TabsContent value="code" className="min-h-0 flex-1">
+      <TabsContent value="classes" className="min-h-0 flex-1">
         <ErrorBoundary resetKey={model}>
           <DiagramCanvas model={model} />
         </ErrorBoundary>
       </TabsContent>
-      <TabsContent value="files" className="min-h-0 flex-1">
+      <TabsContent value="code" className="min-h-0 flex-1">
         <ErrorBoundary resetKey={worktreeId}>
-          <FilesView />
+          <CodeExplorer />
         </ErrorBoundary>
       </TabsContent>
       <div className="flex h-10 shrink-0 items-center border-t px-2">
