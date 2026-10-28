@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { AtSign, Check, Loader2, Shapes, Undo2, X } from "lucide-react"
+import { Check, Loader2, Shapes, Undo2, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils"
 import type { ArchModel } from "@/shared/bindings/ArchModel"
 import type { PatternKind } from "@/shared/bindings/PatternKind"
 import type { PatternView } from "@/shared/bindings/PatternView"
-import { usePromptTags } from "@/shared/workspace/prompt-tags"
 import { useWorkspace } from "@/shared/workspace/workspace-context"
 
 import { useSetPatternDecision } from "../commands/pattern-commands"
@@ -32,7 +31,6 @@ const KIND_LABEL: Record<PatternKind, string> = {
 function PatternRow({ view, active, onSpotlight }: { view: PatternView; active: boolean; onSpotlight: () => void }) {
   const worktree = useWorkspace()
   const decide = useSetPatternDecision()
-  const tags = usePromptTags()
   const { pattern, decision } = view
   const set = (d: PatternView["decision"]) =>
     decide.mutate({ worktreeId: worktree.id, patternId: pattern.id, decision: d })
@@ -54,14 +52,6 @@ function PatternRow({ view, active, onSpotlight }: { view: PatternView; active: 
         {pattern.participants.length} participants · {pattern.evidence[0]}
       </p>
       <div className="mt-1 flex gap-1 opacity-0 group-hover:opacity-100">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button size="icon" variant="ghost" className="size-6" onClick={() => tags.add({ type: "pattern", patternId: pattern.id, label: `pattern:${pattern.name.replace(": ", "/")}` })}>
-              <AtSign className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Tag in agent prompt</TooltipContent>
-        </Tooltip>
         {decision ? (
           <Tooltip>
             <TooltipTrigger asChild>

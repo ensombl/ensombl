@@ -222,11 +222,11 @@ pub struct AgentLaunch {
     /// Continue an earlier session.
     pub resume: Option<String>,
     pub model: Option<String>,
-    pub permission_mode: crate::domain::chat::PermissionMode,
+    pub permission_mode: crate::domain::agent_run::PermissionMode,
 }
 
 /// Receives a chat's events from the runtime's reader thread. The last one is `Exited`.
-pub type ChatEventHandler = Box<dyn Fn(crate::domain::chat::ChatEvent) + Send + Sync>;
+pub type RunEventHandler = Box<dyn Fn(crate::domain::agent_run::RunEvent) + Send + Sync>;
 
 /// A running agent session driven through its structured protocol.
 pub trait AgentConnection: Send + Sync {
@@ -234,10 +234,10 @@ pub trait AgentConnection: Send + Sync {
     fn respond(
         &self,
         request_id: &str,
-        decision: &crate::domain::chat::PermissionDecision,
+        decision: &crate::domain::agent_run::PermissionDecision,
     ) -> Result<()>;
     fn interrupt(&self) -> Result<()>;
-    fn set_permission_mode(&self, mode: crate::domain::chat::PermissionMode) -> Result<()>;
+    fn set_permission_mode(&self, mode: crate::domain::agent_run::PermissionMode) -> Result<()>;
     fn set_model(&self, model: &str) -> Result<()>;
     fn kill(&self);
 }
@@ -247,13 +247,13 @@ pub trait AgentRuntime: Send + Sync {
     fn start(
         &self,
         launch: AgentLaunch,
-        events: ChatEventHandler,
+        events: RunEventHandler,
     ) -> Result<Box<dyn AgentConnection>>;
 }
 
 /// Where a chat's live events go; swapped when a view re-attaches.
 pub trait ChatSink: Send + Sync {
-    fn event(&self, event: &crate::domain::chat::ChatEvent);
+    fn event(&self, event: &crate::domain::agent_run::RunEvent);
 }
 
 // Architecture overrides

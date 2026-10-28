@@ -1,19 +1,16 @@
 import { useState } from "react"
-import { Code2, ExternalLink, Loader2, MessageSquareShare, Settings2, X } from "lucide-react"
+import { Code2, ExternalLink, Loader2, Settings2, X } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Pane, PaneEmpty } from "@/shared/ui/pane"
-import { usePromptTags } from "@/shared/workspace/prompt-tags"
 import { useWorkspace } from "@/shared/workspace/workspace-context"
 
 import { useOpenInEditor, useUpdateSettings } from "../commands/peek-commands"
 import { usePeek, type PeekTarget } from "../model/peek-store"
-import { reviewPrompt } from "../model/review-prompt"
 import { useComments, useSettings, useSource } from "../queries/peek-queries"
 import { CodeView } from "./code-view"
 
@@ -59,15 +56,8 @@ export function PeekPanel({ target, onClose }: { target: PeekTarget; onClose?: (
   const source = useSource(worktree.id, target.file)
   const comments = useComments(worktree.id)
   const openInEditor = useOpenInEditor()
-  const { appendDraft } = usePromptTags()
 
   const fileComments = (comments.data ?? []).filter((c) => c.comment.file === target.file)
-  const openCount = (comments.data ?? []).filter((c) => !c.comment.resolved).length
-
-  const sendReview = () => {
-    const text = reviewPrompt(comments.data ?? [], { [target.file]: source.data?.content })
-    if (text) appendDraft(text)
-  }
 
   return (
     <Pane
@@ -78,19 +68,6 @@ export function PeekPanel({ target, onClose }: { target: PeekTarget; onClose?: (
           <span className="truncate font-mono text-xs text-muted-foreground">
             {target.file}:{target.line}
           </span>
-          {openCount > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 gap-1.5" onClick={sendReview}>
-                  <MessageSquareShare /> Send review
-                  <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                    {openCount}
-                  </Badge>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Put all open comments in the agent prompt</TooltipContent>
-            </Tooltip>
-          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

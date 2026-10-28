@@ -6,7 +6,7 @@ import type { PermissionMode } from "./PermissionMode";
 /**
  * One thing that happened in a chat, in order.
  */
-export type ChatEvent = { "type": "session", sessionId: string, model: string | null, permissionMode: PermissionMode | null, } | { "type": "user", id: string, text: string, 
+export type RunEvent = { "type": "session", sessionId: string, model: string | null, permissionMode: PermissionMode | null, } | { "type": "user", id: string, text: string, 
 /**
  * When it was sent, in ms since the epoch; the UI times the turn from it.
  */
