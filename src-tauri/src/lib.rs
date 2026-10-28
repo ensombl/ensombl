@@ -3,10 +3,12 @@ pub mod domain;
 pub mod infrastructure;
 pub mod interface;
 
+use std::collections::HashMap;
 use std::sync::{Arc, mpsc};
 
 use tauri::Manager;
 
+use application::commands::chats::{ChatCommands, ChatRegistry};
 use application::commands::indexing::{IndexingCommands, IndexingPorts, ReindexPaths};
 use application::commands::patterns::PatternCommands;
 use application::commands::review::ReviewCommands;
@@ -14,15 +16,17 @@ use application::commands::terminals::{TerminalCommands, TerminalRegistry};
 use application::commands::workspaces::WorkspaceCommands;
 use application::cqrs::CommandHandler;
 use application::index_registry::IndexRegistry;
-use application::ports::{ShellEnvironment, SourceScanner};
+use application::ports::{AgentRuntime, ShellEnvironment, SourceScanner};
+use application::queries::chats::ChatQueries;
 use application::queries::get_app_info::GetAppInfoHandler;
 use application::queries::model::ModelQueries;
 use application::queries::patterns::PatternQueries;
 use application::queries::review::ReviewQueries;
 use application::queries::terminals::TerminalQueries;
 use application::queries::workspaces::WorkspaceQueries;
-use domain::terminal::AgentProfile;
+use domain::terminal::{AgentKind, AgentProfile};
 use infrastructure::build_info::CargoBuildInfo;
+use infrastructure::claude_stream::ClaudeCode;
 use infrastructure::fs_scanner::FsScanner;
 use infrastructure::git_cli::GitCli;
 use infrastructure::json_comments::{JsonComments, JsonSettings};
@@ -94,10 +98,21 @@ pub fn run() {
                 terminals.clone(),
                 profiles.clone(),
             ));
+            let chats = Arc::new(ChatRegistry::default());
+            let mut runtimes: HashMap<AgentKind, Arc<dyn AgentRuntime>> = HashMap::new();
+            runtimes.insert(AgentKind::Claude, Arc::new(ClaudeCode));
+            let chat_commands = Arc::new(ChatCommands::new(
+                sessions.clone(),
+                shell.clone(),
+                runtimes,
+                chats.clone(),
+                profiles.clone(),
+            ));
             let comments = Arc::new(JsonComments::open(data_dir.join("comments.json")));
             let settings = Arc::new(JsonSettings::open(data_dir.join("settings.json")));
 
             app.manage(terminals.clone());
+            app.manage(chats.clone());
             app.manage(Handlers {
                 get_app_info: GetAppInfoHandler::new(Arc::new(CargoBuildInfo)),
                 workspace_commands: Arc::new(WorkspaceCommands::new(
@@ -117,6 +132,8 @@ pub fn run() {
                     registry,
                     decisions,
                 )),
+                chat_commands,
+                chat_queries: Arc::new(ChatQueries::new(chats)),
                 terminal_commands: terminal_commands.clone(),
                 terminal_queries: Arc::new(TerminalQueries::new(
                     shell.clone(),
@@ -170,6 +187,15 @@ pub fn run() {
             cmd::write_terminal,
             cmd::resize_terminal,
             cmd::close_terminal,
+            cmd::list_chats,
+            cmd::start_chat,
+            cmd::attach_chat,
+            cmd::send_chat_message,
+            cmd::respond_permission,
+            cmd::interrupt_chat,
+            cmd::set_chat_permission_mode,
+            cmd::set_chat_model,
+            cmd::close_chat,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -177,6 +203,7 @@ pub fn run() {
             // Don't leave agent processes behind.
             if let tauri::RunEvent::Exit = event {
                 app.state::<Arc<TerminalRegistry>>().kill_all();
+                app.state::<Arc<ChatRegistry>>().kill_all();
             }
         });
 }

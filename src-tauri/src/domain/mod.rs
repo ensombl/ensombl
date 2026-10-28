@@ -2,6 +2,7 @@
 //! framework dependencies. Types derive `Serialize`/`TS` so they can cross
 //! the IPC boundary unchanged; that's a derive, not a dependency on Tauri.
 
+pub mod chat;
 pub mod linker;
 pub mod model;
 pub mod parsed;

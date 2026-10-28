@@ -8,7 +8,7 @@ use super::workspace::WorktreeId;
 
 pub type TerminalId = String;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum AgentKind {
@@ -16,6 +16,15 @@ pub enum AgentKind {
     Codex,
     Shell,
     Custom,
+}
+
+/// Whether an agent runs as a native chat or in a terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum AgentMode {
+    Chat,
+    Terminal,
 }
 
 /// How to launch an agent.
@@ -26,6 +35,7 @@ pub struct AgentProfile {
     pub id: String,
     pub label: String,
     pub kind: AgentKind,
+    pub mode: AgentMode,
     /// Program name looked up on the login shell's PATH (or an absolute path).
     pub command: String,
     pub args: Vec<String>,
@@ -33,17 +43,26 @@ pub struct AgentProfile {
 
 impl AgentProfile {
     pub fn builtin() -> Vec<AgentProfile> {
-        let profile = |id: &str, label: &str, kind, command: &str| AgentProfile {
+        let profile = |id: &str, label: &str, kind, mode, command: &str| AgentProfile {
             id: id.into(),
             label: label.into(),
             kind,
+            mode,
             command: command.into(),
             args: vec![],
         };
+        use AgentMode::{Chat, Terminal};
         vec![
-            profile("claude", "Claude Code", AgentKind::Claude, "claude"),
-            profile("codex", "Codex", AgentKind::Codex, "codex"),
-            profile("shell", "Shell", AgentKind::Shell, "$SHELL"),
+            profile("claude", "Claude Code", AgentKind::Claude, Chat, "claude"),
+            profile("codex", "Codex", AgentKind::Codex, Terminal, "codex"),
+            profile(
+                "claude-tui",
+                "Claude Code (terminal)",
+                AgentKind::Claude,
+                Terminal,
+                "claude",
+            ),
+            profile("shell", "Shell", AgentKind::Shell, Terminal, "$SHELL"),
         ]
     }
 }
@@ -99,6 +118,6 @@ mod tests {
     #[test]
     fn builtin_profiles_include_claude_and_codex() {
         let ids: Vec<_> = AgentProfile::builtin().into_iter().map(|p| p.id).collect();
-        assert_eq!(ids, ["claude", "codex", "shell"]);
+        assert_eq!(ids, ["claude", "codex", "claude-tui", "shell"]);
     }
 }
