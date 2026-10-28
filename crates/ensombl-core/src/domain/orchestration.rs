@@ -208,6 +208,16 @@ pub fn branch_name(title: &str, id: &str) -> String {
     }
 }
 
+/// Task worktrees aren't tabs; they're addressed as `task:<id>`.
+pub fn task_worktree_id(task_id: &str) -> String {
+    format!("task:{task_id}")
+}
+
+/// The task a `task:<id>` worktree id belongs to.
+pub fn task_of_worktree(worktree_id: &str) -> Option<&str> {
+    worktree_id.strip_prefix("task:")
+}
+
 /// How a run ended.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -394,6 +404,12 @@ mod tests {
         assert_eq!(schedule(&[child.clone(), parent], 1), ["child"]);
         // A dependency that doesn't exist never unblocks.
         assert!(schedule(&[child], 1).is_empty());
+    }
+
+    #[test]
+    fn task_worktree_ids_round_trip() {
+        assert_eq!(task_of_worktree(&task_worktree_id("k3")), Some("k3"));
+        assert_eq!(task_of_worktree("wt-1"), None);
     }
 
     #[test]

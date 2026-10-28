@@ -63,6 +63,11 @@ pub trait TaskGit: Send + Sync {
     fn delete_branch(&self, repo: &Path, branch: &str) -> Result<()>;
 }
 
+/// Finds a worktree's folder by id: an open tab, or a task's own worktree.
+pub trait WorktreeResolver: Send + Sync {
+    fn root(&self, worktree_id: &str) -> Result<PathBuf>;
+}
+
 /// Persistence for the tab session. `update` must be atomic.
 pub trait SessionRepository: Send + Sync {
     fn get(&self) -> Result<Session>;

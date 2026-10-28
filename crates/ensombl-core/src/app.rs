@@ -24,6 +24,7 @@ use crate::application::queries::patterns::PatternQueries;
 use crate::application::queries::review::ReviewQueries;
 use crate::application::queries::terminals::TerminalQueries;
 use crate::application::queries::workspaces::WorkspaceQueries;
+use crate::application::worktrees::Worktrees;
 use crate::application::{Error, Result};
 use crate::domain::model::ModelDelta;
 use crate::domain::terminal::AgentProfile;
@@ -175,7 +176,7 @@ impl Core {
         let profiles = AgentProfile::builtin();
 
         let terminal_commands = Arc::new(TerminalCommands::new(
-            sessions.clone(),
+            Arc::new(Worktrees::new(sessions.clone(), None)),
             shell.clone(),
             Arc::new(NativePty),
             terminals.clone(),
