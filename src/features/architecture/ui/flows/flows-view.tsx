@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react"
-import { DoorOpen, Loader2, Route } from "lucide-react"
+import { ChevronRight, DoorOpen, Loader2, PanelLeftClose, PanelLeftOpen, Route } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 import { Input } from "@/components/ui/input"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
@@ -41,6 +44,15 @@ export function FlowsView({ system }: { system: SystemView }) {
   const { entry: entryId } = ui.state
   const [query, setQuery] = useState("")
   const [depth, setDepth] = useState(6)
+  const [listOpen, setListOpen] = useState(true)
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set())
+  const toggleGroup = (kind: string, open: boolean) =>
+    setClosedGroups((prev) => {
+      const next = new Set(prev)
+      if (open) next.delete(kind)
+      else next.add(kind)
+      return next
+    })
   const nodes = useMemo(() => new Map(system.model.nodes.map((n) => [n.id, n])), [system.model.nodes])
   const nameOf = (id: string) => nodes.get(id)?.name ?? id
   const groups = groupEntries(system.model.entryPoints, query, nameOf)
@@ -51,54 +63,74 @@ export function FlowsView({ system }: { system: SystemView }) {
 
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-full">
-      <ResizablePanel defaultSize="34" minSize="20" maxSize="70" className="flex flex-col">
-        <div className="border-b p-2">
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter routes, events, jobs…" className="h-8 text-xs" />
-        </div>
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-3 p-2">
-            {groups.map((g) => (
-              <div key={g.kind} className="space-y-0.5">
-                <h3 className="px-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                  {g.label} <span className="font-normal">({g.entries.length})</span>
-                </h3>
-                {g.entries.map((e) => {
-                  const { verb, rest } = splitLabel(e.label)
-                  return (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => ui.openEntry(e.id)}
-                      title={`${e.label}\n${e.site.file}:${e.site.line}`}
-                      className={cn(
-                        "flex w-full gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-accent",
-                        e.id === entryId && "bg-accent text-accent-foreground",
-                      )}
-                    >
-                      {verb && <span className={cn("w-12 shrink-0 pt-px font-mono text-[10px] font-semibold", VERB_COLOR[verb])}>{verb}</span>}
-                      <span className="min-w-0 space-y-0.5">
-                        <span className="block font-mono text-xs break-all">{rest}</span>
-                        <span className="block truncate text-[11px] text-muted-foreground">
-                          {nameOf(e.node)}
-                          {e.member && `.${e.member}`}
-                        </span>
-                      </span>
-                    </button>
-                  )
-                })}
+      {listOpen && (
+        <>
+          <ResizablePanel id="entries" defaultSize="34" minSize="20" maxSize="70" className="flex flex-col">
+            <div className="flex items-center gap-1 border-b p-2">
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter routes, events, jobs…" className="h-8 text-xs" />
+              <Button variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => setListOpen(false)} aria-label="Hide entry points">
+                <PanelLeftClose />
+              </Button>
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-3 p-2">
+                {groups.map((g) => (
+                  <Collapsible
+                    key={g.kind}
+                    open={!closedGroups.has(g.kind)}
+                    onOpenChange={(open) => toggleGroup(g.kind, open)}
+                    className="space-y-0.5"
+                  >
+                    <CollapsibleTrigger className="group flex w-full items-center gap-1 px-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground">
+                      <ChevronRight className="size-3 transition-transform group-data-[state=open]:rotate-90" />
+                      {g.label} <span className="font-normal">({g.entries.length})</span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-0.5">
+                    {g.entries.map((e) => {
+                      const { verb, rest } = splitLabel(e.label)
+                      return (
+                        <button
+                          key={e.id}
+                          type="button"
+                          onClick={() => ui.openEntry(e.id)}
+                          title={`${e.label}\n${e.site.file}:${e.site.line}`}
+                          className={cn(
+                            "flex w-full gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-accent",
+                            e.id === entryId && "bg-accent text-accent-foreground",
+                          )}
+                        >
+                          {verb && <span className={cn("w-12 shrink-0 pt-px font-mono text-[10px] font-semibold", VERB_COLOR[verb])}>{verb}</span>}
+                          <span className="min-w-0 space-y-0.5">
+                            <span className="block font-mono text-xs break-all">{rest}</span>
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {nameOf(e.node)}
+                              {e.member && `.${e.member}`}
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
+                {groups.length === 0 && <p className="p-2 text-xs text-muted-foreground">No entry points found.</p>}
               </div>
-            ))}
-            {groups.length === 0 && <p className="p-2 text-xs text-muted-foreground">No entry points found.</p>}
-          </div>
-        </ScrollArea>
-      </ResizablePanel>
-      <ResizableHandle />
-      <ResizablePanel minSize="30" className="flex min-w-0 flex-col">
+            </ScrollArea>
+          </ResizablePanel>
+          <ResizableHandle />
+        </>
+      )}
+      <ResizablePanel id="flow" minSize="30" className="relative flex min-w-0 flex-col">
+        {!listOpen && (
+          <Button variant="ghost" size="sm" className="absolute top-1.5 left-2 z-20 h-7 gap-1.5 text-xs" onClick={() => setListOpen(true)}>
+            <PanelLeftOpen /> Entry points
+          </Button>
+        )}
         {!entry ? (
           <PaneEmpty icon={<Route />} title="Pick an entry point" description="See the calls, events and requests it sets off, component by component." />
         ) : (
           <>
-            <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+            <div className={cn("flex h-10 shrink-0 items-center gap-2 border-b px-3", !listOpen && "pl-36")}>
               <DoorOpen className="size-4 text-muted-foreground" />
               <span className="truncate font-mono text-sm">{entry.label}</span>
               <button type="button" className="truncate text-xs text-muted-foreground hover:underline" onClick={() => peek(entry.site.file, entry.site.line)}>
