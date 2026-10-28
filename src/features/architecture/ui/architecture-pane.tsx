@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ArchModel } from "@/shared/bindings/ArchModel"
 import { ErrorBoundary } from "@/shared/ui/error-boundary"
 import { Pane, PaneEmpty } from "@/shared/ui/pane"
-import { useWorkspace } from "@/shared/workspace/workspace-context"
+import { useIsActiveWorkspace, useWorkspace } from "@/shared/workspace/workspace-context"
 
 import { useDiagram } from "../model/diagram-store"
 import { useSystemUi, type ArchitectureTab } from "../model/system-store"
@@ -29,8 +29,10 @@ const TABS: { value: ArchitectureTab; label: string; icon: typeof Network }[] = 
 
 function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string }) {
   const ui = useSystemUi()
+  const active = useIsActiveWorkspace()
   const diagram = useDiagram()
   const { data: system } = useSystem(worktreeId)
+  if (!active) return null
 
   const showCode = (symbolId: string) => {
     const kind = model.symbols.find((s) => s.id === symbolId)?.kind
@@ -40,8 +42,12 @@ function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string })
 
   return (
     <Tabs value={ui.state.tab} onValueChange={(v) => ui.setTab(v as ArchitectureTab)} className="flex h-full flex-col gap-0">
-      {/* Kept mounted so each lens keeps its viewport when you switch back. */}
-      <TabsContent value="components" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
+      {/*
+        Only the visible lens is mounted (Radix unmounts the rest), and none in a
+        background worktree: hidden maps kept re-laying out on every file change,
+        queueing on the one ELK worker ahead of the map you're looking at.
+      */}
+      <TabsContent value="components" className="min-h-0 flex-1">
         {system ? (
           <ErrorBoundary resetKey={system}>
             <ComponentsCanvas system={system} onShowCode={showCode} />
@@ -50,26 +56,26 @@ function Lenses({ model, worktreeId }: { model: ArchModel; worktreeId: string })
           <PaneEmpty icon={<Loader2 className="animate-spin" />} title="Working out the architecture…" description="Finding components and how they talk" />
         )}
       </TabsContent>
-      <TabsContent value="flows" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
+      <TabsContent value="flows" className="min-h-0 flex-1">
         {system && (
           <ErrorBoundary resetKey={system}>
             <FlowsView system={system} />
           </ErrorBoundary>
         )}
       </TabsContent>
-      <TabsContent value="boundaries" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
+      <TabsContent value="boundaries" className="min-h-0 flex-1">
         {system && (
           <ErrorBoundary resetKey={system}>
             <BoundariesView system={system} />
           </ErrorBoundary>
         )}
       </TabsContent>
-      <TabsContent value="code" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
+      <TabsContent value="code" className="min-h-0 flex-1">
         <ErrorBoundary resetKey={model}>
           <DiagramCanvas model={model} />
         </ErrorBoundary>
       </TabsContent>
-      <TabsContent value="files" forceMount className="min-h-0 flex-1 data-[state=inactive]:hidden">
+      <TabsContent value="files" className="min-h-0 flex-1">
         <ErrorBoundary resetKey={worktreeId}>
           <FilesView />
         </ErrorBoundary>

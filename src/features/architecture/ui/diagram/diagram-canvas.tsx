@@ -17,6 +17,7 @@ import { useIsActiveWorkspace } from "@/shared/workspace/workspace-context"
 
 import { flattenLayout, layoutSignature, toElkGraph, type Layout } from "../../layout/elk-graph"
 import { verticalHandles } from "../../layout/handles"
+import { layoutCache } from "../../layout/layout-cache"
 import { runLayout } from "../../layout/run-layout"
 import { useChanges } from "../../model/changes-store"
 import { useDiagram } from "../../model/diagram-store"
@@ -35,6 +36,9 @@ import { UmlEdgeComponent, UmlMarkers, type UmlFlowEdge } from "./uml-edge"
 const nodeTypes = { symbol: SymbolNodeComponent, group: GroupNodeComponent }
 const edgeTypes = { uml: UmlEdgeComponent }
 const MINIMAP_MAX_NODES = 300
+/** Viewport culling mounts and unmounts nodes while panning; only worth it on huge views. */
+const CULL_ABOVE = 1000
+const layouts = layoutCache<{ layout: Layout; routed: Set<string> }>()
 
 function Canvas({ model }: { model: ArchModel }) {
   const diagram = useDiagram()
@@ -44,7 +48,7 @@ function Canvas({ model }: { model: ArchModel }) {
   // ⌘K belongs to whichever lens is showing.
   const active = workspaceActive && tab === "code"
   const flow = useReactFlow()
-  const [layout, setLayout] = useState<{ layout: Layout; routed: Set<string> } | null>(null)
+  const [computed, setLayout] = useState<{ layout: Layout; routed: Set<string> } | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const fitted = useRef(false)
 
@@ -69,12 +73,18 @@ function Canvas({ model }: { model: ArchModel }) {
   useEffect(() => {
     latestView.current = layoutView
   })
+  // A cached layout for this structure is used right away; otherwise ELK runs.
+  const layout = layouts.get(signature) ?? computed
   useEffect(() => {
     let cancelled = false
+    if (layouts.get(signature)) return
     const { graph, routed } = toElkGraph(latestView.current)
     runLayout(graph)
       .then((result) => {
-        if (!cancelled) setLayout({ layout: flattenLayout(result), routed })
+        if (cancelled) return
+        const next = { layout: flattenLayout(result), routed }
+        layouts.set(signature, next)
+        setLayout(next)
       })
       .catch((error) => console.error("layout failed", error))
     return () => {
@@ -220,7 +230,7 @@ function Canvas({ model }: { model: ArchModel }) {
             diagram.clearSpotlight()
           }}
           proOptions={{ hideAttribution: true }}
-          onlyRenderVisibleElements
+          onlyRenderVisibleElements={nodes.length > CULL_ABOVE}
         >
           <UmlMarkers />
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
