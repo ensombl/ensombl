@@ -12,10 +12,10 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use crate::application::ports::{AgentConnection, AgentLaunch, AgentRuntime, ChatEventHandler};
+use crate::application::ports::{AgentConnection, AgentLaunch, AgentRuntime, RunEventHandler};
 use crate::application::{Error, Result};
-use crate::domain::chat::{
-    ChatEvent, ContentBlock, NoticeLevel, PermissionDecision, PermissionMode,
+use crate::domain::agent_run::{
+    RunEvent, ContentBlock, NoticeLevel, PermissionDecision, PermissionMode,
 };
 
 const MAX_TOOL_OUTPUT: usize = 100_000;
@@ -26,7 +26,7 @@ pub struct ClaudeCode;
 /// What one protocol line turns into.
 #[derive(Debug, PartialEq)]
 enum Parsed {
-    Event(ChatEvent),
+    Event(RunEvent),
     /// A permission request whose input and suggestions we need when answering.
     Pending {
         request_id: String,
@@ -103,7 +103,7 @@ impl Parser {
         match v.get("type").and_then(Value::as_str) {
             Some("system") => match v.get("subtype").and_then(Value::as_str) {
                 Some("init") => match str_field(&v, "session_id") {
-                    Some(session_id) => event(ChatEvent::Session {
+                    Some(session_id) => event(RunEvent::Session {
                         session_id,
                         model: str_field(&v, "model"),
                         permission_mode: v
@@ -112,7 +112,7 @@ impl Parser {
                     }),
                     None => vec![],
                 },
-                Some("compact_boundary") => event(ChatEvent::Notice {
+                Some("compact_boundary") => event(RunEvent::Notice {
                     level: NoticeLevel::Info,
                     text: "Conversation compacted".into(),
                 }),
@@ -128,7 +128,7 @@ impl Parser {
                     .as_array()
                     .map(|c| c.iter().filter_map(content_block).collect())
                     .unwrap_or_default();
-                event(ChatEvent::Assistant {
+                event(RunEvent::Assistant {
                     message_id,
                     parent,
                     blocks,
@@ -140,7 +140,7 @@ impl Parser {
                 .flatten()
                 .filter(|b| b.get("type").and_then(Value::as_str) == Some("tool_result"))
                 .filter_map(|b| {
-                    Some(Parsed::Event(ChatEvent::ToolResult {
+                    Some(Parsed::Event(RunEvent::ToolResult {
                         tool_use_id: str_field(b, "tool_use_id")?,
                         content: tool_output(b.get("content")),
                         is_error: b.get("is_error").and_then(Value::as_bool).unwrap_or(false),
@@ -153,7 +153,7 @@ impl Parser {
                     let found: Vec<f64> = keys.iter().filter_map(|k| usage[k].as_f64()).collect();
                     (!found.is_empty()).then(|| found.iter().sum())
                 };
-                event(ChatEvent::TurnComplete {
+                event(RunEvent::TurnComplete {
                     is_error: v["is_error"].as_bool().unwrap_or(false),
                     result: str_field(&v, "result"),
                     duration_ms: v["duration_ms"].as_f64(),
@@ -182,7 +182,7 @@ impl Parser {
                             .cloned()
                             .unwrap_or(Value::Null),
                     },
-                    Parsed::Event(ChatEvent::Permission {
+                    Parsed::Event(RunEvent::Permission {
                         request_id,
                         tool_name: str_field(request, "tool_name").unwrap_or_default(),
                         tool_use_id: str_field(request, "tool_use_id"),
@@ -212,7 +212,7 @@ impl Parser {
                 ) else {
                     return vec![];
                 };
-                vec![Parsed::Event(ChatEvent::BlockStart {
+                vec![Parsed::Event(RunEvent::BlockStart {
                     message_id,
                     parent,
                     index: index as u32,
@@ -229,7 +229,7 @@ impl Parser {
                 };
                 match (text, self.current.get(&parent), e["index"].as_u64()) {
                     (Some(text), Some(message_id), Some(index)) if !text.is_empty() => {
-                        vec![Parsed::Event(ChatEvent::BlockDelta {
+                        vec![Parsed::Event(RunEvent::BlockDelta {
                             message_id: message_id.clone(),
                             index: index as u32,
                             text,
@@ -243,7 +243,7 @@ impl Parser {
                 e["usage"]["output_tokens"].as_f64(),
             ) {
                 (Some(message_id), Some(output_tokens)) => {
-                    vec![Parsed::Event(ChatEvent::Usage {
+                    vec![Parsed::Event(RunEvent::Usage {
                         message_id: message_id.clone(),
                         output_tokens,
                     })]
@@ -258,7 +258,7 @@ impl Parser {
     fn control_response(r: &Value) -> Vec<Parsed> {
         let id = r["request_id"].as_str().unwrap_or_default();
         if r["subtype"].as_str() == Some("error") {
-            return vec![Parsed::Event(ChatEvent::Notice {
+            return vec![Parsed::Event(RunEvent::Notice {
                 level: NoticeLevel::Error,
                 text: str_field(r, "error").unwrap_or_else(|| "Request failed".into()),
             })];
@@ -269,12 +269,12 @@ impl Parser {
                 .get("mode")
                 .and_then(|m| serde_json::from_value::<PermissionMode>(m.clone()).ok())
             {
-                return vec![Parsed::Event(ChatEvent::ModeChanged { mode })];
+                return vec![Parsed::Event(RunEvent::ModeChanged { mode })];
             }
         } else if id.starts_with("model-")
             && let Some(model) = str_field(body, "model")
         {
-            return vec![Parsed::Event(ChatEvent::ModelChanged { model })];
+            return vec![Parsed::Event(RunEvent::ModelChanged { model })];
         }
         vec![]
     }
@@ -403,7 +403,7 @@ impl AgentRuntime for ClaudeCode {
     fn start(
         &self,
         launch: AgentLaunch,
-        events: ChatEventHandler,
+        events: RunEventHandler,
     ) -> Result<Box<dyn AgentConnection>> {
         let mut args: Vec<String> = [
             "-p",
@@ -484,12 +484,12 @@ impl AgentRuntime for ClaudeCode {
             let code = reader.wait();
             let tail = stderr.join().unwrap_or_default();
             if code != Some(0) && !tail.is_empty() {
-                events(ChatEvent::Notice {
+                events(RunEvent::Notice {
                     level: NoticeLevel::Error,
                     text: tail,
                 });
             }
-            events(ChatEvent::Exited { code });
+            events(RunEvent::Exited { code });
         });
         Ok(Box::new(connection))
     }
@@ -522,18 +522,18 @@ mod tests {
         assert_eq!(
             out,
             [
-                Parsed::Event(ChatEvent::BlockStart {
+                Parsed::Event(RunEvent::BlockStart {
                     message_id: "msg_1".into(),
                     parent: None,
                     index: 1,
                     block: ContentBlock::Text { text: "".into() },
                 }),
-                Parsed::Event(ChatEvent::BlockDelta {
+                Parsed::Event(RunEvent::BlockDelta {
                     message_id: "msg_1".into(),
                     index: 1,
                     text: "Done.".into(),
                 }),
-                Parsed::Event(ChatEvent::Usage {
+                Parsed::Event(RunEvent::Usage {
                     message_id: "msg_1".into(),
                     output_tokens: 42.0,
                 }),
@@ -558,7 +558,7 @@ mod tests {
         assert_eq!(
             out,
             [
-                Parsed::Event(ChatEvent::Assistant {
+                Parsed::Event(RunEvent::Assistant {
                     message_id: "msg_2".into(),
                     parent: Some("toolu_task".into()),
                     blocks: vec![ContentBlock::ToolUse {
@@ -567,7 +567,7 @@ mod tests {
                         input: json!({"file_path":"/b.txt","content":"hi"}),
                     }],
                 }),
-                Parsed::Event(ChatEvent::ToolResult {
+                Parsed::Event(RunEvent::ToolResult {
                     tool_use_id: "toolu_1".into(),
                     content: "ok\n[image]".into(),
                     is_error: true,
@@ -591,7 +591,7 @@ mod tests {
             matches!(&out[0], Parsed::Pending { request_id, suggestions, .. } if request_id == "r1" && suggestions.is_array())
         );
         assert!(
-            matches!(&out[1], Parsed::Event(ChatEvent::Permission { tool_name, tool_use_id: Some(t), .. }) if tool_name == "Write" && t == "toolu_1")
+            matches!(&out[1], Parsed::Event(RunEvent::Permission { tool_name, tool_use_id: Some(t), .. }) if tool_name == "Write" && t == "toolu_1")
         );
         assert_eq!(
             out[2],
@@ -617,12 +617,12 @@ mod tests {
         assert_eq!(
             out,
             [
-                Parsed::Event(ChatEvent::Session {
+                Parsed::Event(RunEvent::Session {
                     session_id: "s1".into(),
                     model: Some("claude-opus".into()),
                     permission_mode: Some(PermissionMode::Default),
                 }),
-                Parsed::Event(ChatEvent::TurnComplete {
+                Parsed::Event(RunEvent::TurnComplete {
                     is_error: false,
                     result: Some("Done".into()),
                     duration_ms: Some(4213.0),
@@ -630,13 +630,13 @@ mod tests {
                     input_tokens: Some(14.0),
                     output_tokens: Some(7.0),
                 }),
-                Parsed::Event(ChatEvent::ModeChanged {
+                Parsed::Event(RunEvent::ModeChanged {
                     mode: PermissionMode::AcceptEdits
                 }),
-                Parsed::Event(ChatEvent::ModelChanged {
+                Parsed::Event(RunEvent::ModelChanged {
                     model: "claude-sonnet".into()
                 }),
-                Parsed::Event(ChatEvent::Notice {
+                Parsed::Event(RunEvent::Notice {
                     level: NoticeLevel::Error,
                     text: "nothing to interrupt".into()
                 }),
@@ -693,11 +693,11 @@ echo '{"type":"result","is_error":false}'
             )
             .unwrap();
         conn.send("hi").unwrap();
-        let got: Vec<ChatEvent> = rx.iter().take(4).collect();
-        assert!(matches!(got[0], ChatEvent::Session { .. }));
-        assert!(matches!(&got[1], ChatEvent::Assistant { blocks, .. } if blocks.len() == 1));
-        assert!(matches!(got[2], ChatEvent::TurnComplete { .. }));
-        assert_eq!(got[3], ChatEvent::Exited { code: Some(0) });
+        let got: Vec<RunEvent> = rx.iter().take(4).collect();
+        assert!(matches!(got[0], RunEvent::Session { .. }));
+        assert!(matches!(&got[1], RunEvent::Assistant { blocks, .. } if blocks.len() == 1));
+        assert!(matches!(got[2], RunEvent::TurnComplete { .. }));
+        assert_eq!(got[3], RunEvent::Exited { code: Some(0) });
     }
 
     /// Against the real CLI: `CRM_CLAUDE=$(which claude) cargo test claude_smoke -- --ignored --nocapture`.
@@ -733,7 +733,7 @@ echo '{"type":"result","is_error":false}'
         for event in rx.iter() {
             println!("{}", serde_json::to_string(&event).unwrap());
             match event {
-                ChatEvent::Permission { request_id, .. } => conn
+                RunEvent::Permission { request_id, .. } => conn
                     .respond(
                         &request_id,
                         &PermissionDecision {
@@ -744,11 +744,11 @@ echo '{"type":"result","is_error":false}'
                         },
                     )
                     .unwrap(),
-                ChatEvent::TurnComplete { is_error, .. } => {
+                RunEvent::TurnComplete { is_error, .. } => {
                     assert!(!is_error);
                     break;
                 }
-                ChatEvent::Exited { .. } => panic!("exited early"),
+                RunEvent::Exited { .. } => panic!("exited early"),
                 _ => {}
             }
         }

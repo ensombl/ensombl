@@ -1,15 +1,11 @@
-//! Native agent chats: an agent CLI driven through its structured protocol
-//! instead of a terminal. Every runtime is normalized into [`ChatEvent`]s so
-//! the UI renders Claude, Codex, ... the same way.
+//! Headless agent runs: an agent CLI driven through its structured protocol
+//! instead of a terminal. Every runtime is normalized into [`RunEvent`]s so
+//! the orchestrator treats Claude, Codex, ... the same way.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
-use super::terminal::AgentKind;
-use super::workspace::WorktreeId;
-
-pub type ChatId = String;
 
 /// How much the agent may do without asking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
@@ -34,23 +30,6 @@ impl PermissionMode {
             Self::BypassPermissions => "bypassPermissions",
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub struct ChatInfo {
-    pub id: ChatId,
-    pub worktree_id: WorktreeId,
-    pub profile_id: String,
-    pub agent: AgentKind,
-    pub title: String,
-    pub running: bool,
-    /// A turn is in progress.
-    pub busy: bool,
-    pub session_id: Option<String>,
-    pub model: Option<String>,
-    pub permission_mode: PermissionMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -109,7 +88,7 @@ pub enum NoticeLevel {
     rename_all_fields = "camelCase"
 )]
 #[ts(export)]
-pub enum ChatEvent {
+pub enum RunEvent {
     /// The agent reported its session (sent again at the start of each turn).
     Session {
         session_id: String,
@@ -186,21 +165,21 @@ pub enum ChatEvent {
     },
 }
 
-/// Everything a chat has emitted, so a re-attached view can rebuild itself.
+/// Everything a run has emitted, so a view can rebuild it.
 /// Consecutive deltas of one block are merged to keep it small.
 #[derive(Debug, Default)]
 pub struct Transcript {
-    events: Vec<ChatEvent>,
+    events: Vec<RunEvent>,
 }
 
 impl Transcript {
-    pub fn push(&mut self, event: ChatEvent) {
-        if let ChatEvent::BlockDelta {
+    pub fn push(&mut self, event: RunEvent) {
+        if let RunEvent::BlockDelta {
             message_id,
             index,
             text,
         } = &event
-            && let Some(ChatEvent::BlockDelta {
+            && let Some(RunEvent::BlockDelta {
                 message_id: last_id,
                 index: last_index,
                 text: last_text,
@@ -214,38 +193,8 @@ impl Transcript {
         self.events.push(event);
     }
 
-    pub fn events(&self) -> &[ChatEvent] {
+    pub fn events(&self) -> &[RunEvent] {
         &self.events
-    }
-}
-
-impl ChatInfo {
-    /// Folds an event into the summary shown in tabs.
-    pub fn apply(&mut self, event: &ChatEvent) {
-        match event {
-            ChatEvent::Session {
-                session_id,
-                model,
-                permission_mode,
-            } => {
-                self.session_id = Some(session_id.clone());
-                if model.is_some() {
-                    self.model = model.clone();
-                }
-                if let Some(mode) = permission_mode {
-                    self.permission_mode = *mode;
-                }
-            }
-            ChatEvent::User { .. } => self.busy = true,
-            ChatEvent::TurnComplete { .. } => self.busy = false,
-            ChatEvent::ModeChanged { mode } => self.permission_mode = *mode,
-            ChatEvent::ModelChanged { model } => self.model = Some(model.clone()),
-            ChatEvent::Exited { .. } => {
-                self.running = false;
-                self.busy = false;
-            }
-            _ => {}
-        }
     }
 }
 
@@ -253,8 +202,8 @@ impl ChatInfo {
 mod tests {
     use super::*;
 
-    fn delta(id: &str, index: u32, text: &str) -> ChatEvent {
-        ChatEvent::BlockDelta {
+    fn delta(id: &str, index: u32, text: &str) -> RunEvent {
+        RunEvent::BlockDelta {
             message_id: id.into(),
             index,
             text: text.into(),
@@ -276,37 +225,6 @@ mod tests {
                 delta("m", 0, "!")
             ]
         );
-    }
-
-    #[test]
-    fn info_tracks_session_turns_and_exit() {
-        let mut info = ChatInfo {
-            id: "c1".into(),
-            worktree_id: "wt".into(),
-            profile_id: "claude".into(),
-            agent: AgentKind::Claude,
-            title: "Claude Code".into(),
-            running: true,
-            busy: false,
-            session_id: None,
-            model: None,
-            permission_mode: PermissionMode::Default,
-        };
-        info.apply(&ChatEvent::Session {
-            session_id: "s".into(),
-            model: Some("opus".into()),
-            permission_mode: Some(PermissionMode::Plan),
-        });
-        info.apply(&ChatEvent::User {
-            id: "u".into(),
-            text: "hi".into(),
-            at: 0.0,
-        });
-        assert!(info.busy);
-        assert_eq!(info.session_id.as_deref(), Some("s"));
-        assert_eq!(info.permission_mode, PermissionMode::Plan);
-        info.apply(&ChatEvent::Exited { code: Some(0) });
-        assert!(!info.running && !info.busy);
     }
 
     #[test]

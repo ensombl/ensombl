@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
 use crate::application::commands::architecture::ArchitectureCommands;
-use crate::application::commands::chats::ChatCommands;
 use crate::application::commands::indexing::IndexingCommands;
 use crate::application::commands::patterns::PatternCommands;
 use crate::application::commands::review::ReviewCommands;
 use crate::application::commands::terminals::TerminalCommands;
 use crate::application::commands::workspaces::WorkspaceCommands;
 use crate::application::queries::architecture::ArchitectureQueries;
-use crate::application::queries::chats::ChatQueries;
 use crate::application::queries::files::FileQueries;
 use crate::application::queries::get_app_info::GetAppInfoHandler;
 use crate::application::queries::model::ModelQueries;
@@ -30,8 +28,6 @@ pub struct Handlers {
     pub architecture_commands: Arc<ArchitectureCommands>,
     pub architecture_queries: Arc<ArchitectureQueries>,
     pub file_queries: Arc<FileQueries>,
-    pub chat_commands: Arc<ChatCommands>,
-    pub chat_queries: Arc<ChatQueries>,
     pub pattern_commands: Arc<PatternCommands>,
     pub pattern_queries: Arc<PatternQueries>,
     pub review_commands: Arc<ReviewCommands>,

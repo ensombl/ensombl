@@ -1,7 +1,7 @@
 //! Infrastructure layer: adapters implementing application ports.
 
 pub mod build_info;
-pub mod claude_stream;
+pub mod claude_headless;
 pub mod fs_scanner;
 pub mod git_cli;
 pub mod json_architecture;

@@ -1,7 +1,6 @@
 //! Query handlers (read-only use cases).
 
 pub mod architecture;
-pub mod chats;
 pub mod files;
 pub mod get_app_info;
 pub mod model;
