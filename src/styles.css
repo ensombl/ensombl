@@ -162,3 +162,19 @@
   animation: crm-change-flash 0.9s ease-out 3;
   opacity: 0;
 }
+
+/* A light sweep across the "cooking" verb while an agent works. */
+@keyframes crm-shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+.crm-shimmer {
+  background: linear-gradient(90deg, currentColor 40%, #fde2d6 50%, currentColor 60%) 0 0 / 250% 100% no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: crm-shimmer 2.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .crm-shimmer { animation: none; }
+}

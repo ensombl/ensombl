@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import type { ChatEvent } from "@/shared/bindings/ChatEvent"
 import type { ContentBlock } from "@/shared/bindings/ContentBlock"
 
-import { pendingPermissions, reduceAll } from "./chat-state"
+import { pendingPermissions, reduceAll, turnTokens } from "./chat-state"
 
 const start = (messageId: string, index: number, block: ContentBlock, parent: string | null = null): ChatEvent => ({
   type: "blockStart",
@@ -16,7 +16,7 @@ const start = (messageId: string, index: number, block: ContentBlock, parent: st
 describe("reduceChat", () => {
   it("streams text and ignores the duplicate final copy", () => {
     const state = reduceAll([
-      { type: "user", id: "u1", text: "hi" },
+      { type: "user", id: "u1", text: "hi", at: 1000 },
       start("m1", 0, { type: "text", text: "" }),
       { type: "blockDelta", messageId: "m1", index: 0, text: "Hel" },
       { type: "blockDelta", messageId: "m1", index: 0, text: "lo" },
@@ -48,7 +48,7 @@ describe("reduceChat", () => {
 
   it("nests subagent output under its task and keeps unrelated items stable", () => {
     const state = reduceAll([
-      { type: "user", id: "u1", text: "go" },
+      { type: "user", id: "u1", text: "go", at: 1000 },
       start("m1", 0, { type: "toolUse", id: "task", name: "Task", input: {} }),
       { type: "assistant", messageId: "s1", parent: "task", blocks: [{ type: "text", text: "sub" }, { type: "toolUse", id: "t2", name: "Read", input: {} }] },
     ])
@@ -63,11 +63,27 @@ describe("reduceChat", () => {
   it("tracks session, cost and exit", () => {
     const state = reduceAll([
       { type: "session", sessionId: "s", model: "opus", permissionMode: "plan" },
-      { type: "user", id: "u1", text: "hi" },
+      { type: "user", id: "u1", text: "hi", at: 1000 },
       { type: "turnComplete", isError: false, result: "ok", durationMs: 10, costUsd: 0.2, inputTokens: 1200, outputTokens: 3 },
       { type: "modeChanged", mode: "acceptEdits" },
       { type: "exited", code: 0 },
     ])
     expect(state).toMatchObject({ sessionId: "s", model: "opus", mode: "acceptEdits", costUsd: 0.2, busy: false, running: false })
+  })
+
+  it("times the turn and counts tokens, preferring reported usage", () => {
+    const state = reduceAll([
+      { type: "user", id: "u1", text: "hi", at: 5000 },
+      start("m1", 0, { type: "text", text: "" }),
+      { type: "blockDelta", messageId: "m1", index: 0, text: "x".repeat(40) },
+      start("m2", 0, { type: "text", text: "" }),
+      { type: "blockDelta", messageId: "m2", index: 0, text: "x".repeat(8) },
+    ])
+    expect(state.turn?.startedAt).toBe(5000)
+    expect(turnTokens(state.turn!)).toBe(12)
+    const reported = reduceAll([{ type: "usage", messageId: "m1", outputTokens: 30 }], state)
+    expect(turnTokens(reported.turn!)).toBe(32)
+    const done = reduceAll([{ type: "turnComplete", isError: false, result: null, durationMs: 1, costUsd: null, inputTokens: null, outputTokens: null }], reported)
+    expect(done.turn).toBeNull()
   })
 })

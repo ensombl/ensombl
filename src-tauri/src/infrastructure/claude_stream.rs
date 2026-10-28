@@ -238,6 +238,18 @@ impl Parser {
                     _ => vec![],
                 }
             }
+            Some("message_delta") => match (
+                self.current.get(&parent),
+                e["usage"]["output_tokens"].as_f64(),
+            ) {
+                (Some(message_id), Some(output_tokens)) => {
+                    vec![Parsed::Event(ChatEvent::Usage {
+                        message_id: message_id.clone(),
+                        output_tokens,
+                    })]
+                }
+                _ => vec![],
+            },
             _ => vec![],
         }
     }
@@ -504,6 +516,7 @@ mod tests {
                 json!({"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}}),
                 json!({"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Done."}}}),
                 json!({"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{"}}}),
+                json!({"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":42}}}),
             ],
         );
         assert_eq!(
@@ -519,6 +532,10 @@ mod tests {
                     message_id: "msg_1".into(),
                     index: 1,
                     text: "Done.".into(),
+                }),
+                Parsed::Event(ChatEvent::Usage {
+                    message_id: "msg_1".into(),
+                    output_tokens: 42.0,
                 }),
             ]
         );

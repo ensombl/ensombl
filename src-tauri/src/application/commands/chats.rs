@@ -335,7 +335,15 @@ impl CommandHandler<SendChatMessage> for ChatCommands {
         }
         chat.connection.send(&cmd.text)?;
         let id = format!("u{}", chat.state.transcript.lock().unwrap().events().len());
-        chat.state.record(ChatEvent::User { id, text: cmd.text });
+        let at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or_default();
+        chat.state.record(ChatEvent::User {
+            id,
+            text: cmd.text,
+            at,
+        });
         Ok(())
     }
 }

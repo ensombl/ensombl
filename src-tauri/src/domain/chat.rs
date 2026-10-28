@@ -119,6 +119,8 @@ pub enum ChatEvent {
     User {
         id: String,
         text: String,
+        /// When it was sent, in ms since the epoch; the UI times the turn from it.
+        at: f64,
     },
     /// A streamed content block began. `parent` is set for subagent output.
     BlockStart {
@@ -131,6 +133,11 @@ pub enum ChatEvent {
         message_id: String,
         index: u32,
         text: String,
+    },
+    /// Output tokens of a finished message, replacing the UI's estimate from deltas.
+    Usage {
+        message_id: String,
+        output_tokens: f64,
     },
     /// A complete assistant message (or part of one); authoritative over deltas.
     Assistant {
@@ -293,6 +300,7 @@ mod tests {
         info.apply(&ChatEvent::User {
             id: "u".into(),
             text: "hi".into(),
+            at: 0.0,
         });
         assert!(info.busy);
         assert_eq!(info.session_id.as_deref(), Some("s"));
