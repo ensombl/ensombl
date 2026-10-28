@@ -15,6 +15,8 @@ export function useTaskEvents() {
   useBackendEvent<{ id: string }>("tasks://changed", (task) => {
     client.invalidateQueries({ queryKey: [...taskKeys.all, "list"] })
     client.invalidateQueries({ queryKey: taskKeys.detail(task.id) })
+    client.invalidateQueries({ queryKey: [...taskKeys.all, "usage"] })
+    client.invalidateQueries({ queryKey: [...taskKeys.all, "coordination"] })
   })
   useBackendEvent<RunEventPayload>("tasks://run", ({ taskId, runId, event }) => {
     client.setQueryData<RunEvent[]>(taskKeys.log(runId), (log) => (log ? [...log, event] : log))

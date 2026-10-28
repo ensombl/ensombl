@@ -61,24 +61,11 @@ pub struct AppPaths {
     pub worktrees_dir: PathBuf,
 }
 
-/// Orchestrated tasks running at once, unless a shell says otherwise.
-pub const DEFAULT_CONCURRENCY: usize = 3;
-
 /// Shell-specific choices.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CoreOptions {
-    pub concurrency: usize,
     /// MCP config pointing at Ensombl's bridge; adds the lead agent profile.
     pub lead_mcp_config: Option<PathBuf>,
-}
-
-impl Default for CoreOptions {
-    fn default() -> Self {
-        Self {
-            concurrency: DEFAULT_CONCURRENCY,
-            lead_mcp_config: None,
-        }
-    }
 }
 
 pub const INDEX_PROGRESS: &str = "index://progress";
@@ -242,7 +229,7 @@ impl Core {
             bus,
             clock: Arc::new(SystemClock),
             worktrees_dir: worktrees_dir.clone(),
-            concurrency: options.concurrency,
+            settings: settings.clone(),
         }));
         task_commands.recover()?;
         task_commands.dispatch();

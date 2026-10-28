@@ -29,6 +29,7 @@ export function useTaskCommands() {
     approve: useTaskMutation<ById, Task>("approve_task", "merge the task"),
     remove: useTaskMutation<ById, void>("delete_task", "delete the task"),
     update: useTaskMutation<ById, void>("update_task_branch", "update the branch"),
+    stopAll: useTaskMutation<{ projectId: string }, number>("stop_all_tasks", "stop the tasks"),
     respond: useTaskMutation<ById & { requestId: string; decision: PermissionDecision }, void>("respond_to_task", "answer the agent"),
     followUp: useTaskMutation<ById & { prompt: string }, Task>("send_follow_up", "send the follow-up"),
   }

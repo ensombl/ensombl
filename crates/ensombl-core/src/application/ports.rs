@@ -224,12 +224,15 @@ pub trait CommentStore: Send + Sync {
 pub struct Settings {
     /// Command to open a file at a line. `{file}` and `{line}` are substituted.
     pub editor_command: String,
+    /// How many orchestrated tasks may run at once.
+    pub task_concurrency: u32,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             editor_command: "nvim +{line} {file}".into(),
+            task_concurrency: 3,
         }
     }
 }

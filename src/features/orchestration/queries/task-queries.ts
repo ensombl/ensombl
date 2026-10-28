@@ -4,6 +4,7 @@ import type { RunEvent } from "@/shared/bindings/RunEvent"
 import type { Task } from "@/shared/bindings/Task"
 import type { TaskCoordination } from "@/shared/bindings/TaskCoordination"
 import type { TaskDetail } from "@/shared/bindings/TaskDetail"
+import type { Usage } from "@/shared/bindings/Usage"
 import { query } from "@/shared/ipc/client"
 
 export const taskKeys = {
@@ -13,6 +14,7 @@ export const taskKeys = {
   log: (runId: string) => [...taskKeys.all, "log", runId] as const,
   diff: (taskId: string) => [...taskKeys.all, "diff", taskId] as const,
   coordination: (projectId: string) => [...taskKeys.all, "coordination", projectId] as const,
+  usage: (projectId: string) => [...taskKeys.all, "usage", projectId] as const,
 }
 
 /** A project's orchestrated tasks, oldest first. */
@@ -54,5 +56,19 @@ export function useCoordination(projectId: string, live: boolean) {
     queryKey: taskKeys.coordination(projectId),
     queryFn: () => query<TaskCoordination[]>("get_coordination", { input: { projectId } }),
     refetchInterval: live ? 10_000 : false,
+  })
+}
+
+const startOfToday = () => {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+/** What this project's runs cost, today (local time) and overall. */
+export function useUsage(projectId: string) {
+  return useQuery({
+    queryKey: taskKeys.usage(projectId),
+    queryFn: () => query<Usage>("get_usage", { input: { projectId, since: startOfToday() } }),
   })
 }

@@ -121,6 +121,7 @@ mod tests {
         settings
             .set(Settings {
                 editor_command: "code -g {file}:{line}".into(),
+                ..Settings::default()
             })
             .unwrap();
         assert_eq!(

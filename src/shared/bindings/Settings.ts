@@ -7,4 +7,8 @@ export type Settings = {
 /**
  * Command to open a file at a line. `{file}` and `{line}` are substituted.
  */
-editorCommand: string, };
+editorCommand: string, 
+/**
+ * How many orchestrated tasks may run at once.
+ */
+taskConcurrency: number, };
