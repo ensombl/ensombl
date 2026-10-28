@@ -148,7 +148,8 @@ pub fn transition(task: &Task, event: TaskEvent, now: u64) -> Result<Task, Inval
             next.summary = summary.clone();
             next.next_prompt = None;
         }
-        (Running | NeedsInput, TaskEvent::Failed { error }) => {
+        // Queued tasks fail when they can't even start (no worktree, no CLI).
+        (Queued | Running | NeedsInput, TaskEvent::Failed { error }) => {
             next.status = Failed;
             next.error = Some(error.clone());
         }
@@ -361,6 +362,19 @@ mod tests {
         )
         .unwrap();
         assert_eq!(restarted.error, None);
+    }
+
+    #[test]
+    fn queued_tasks_can_fail_to_start() {
+        let t = transition(
+            &task("a", TaskStatus::Queued, 0),
+            TaskEvent::Failed {
+                error: "claude isn't installed".into(),
+            },
+            1,
+        )
+        .unwrap();
+        assert_eq!(t.status, TaskStatus::Failed);
     }
 
     #[test]

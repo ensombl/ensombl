@@ -4,5 +4,6 @@ pub mod architecture;
 pub mod indexing;
 pub mod patterns;
 pub mod review;
+pub mod tasks;
 pub mod terminals;
 pub mod workspaces;
