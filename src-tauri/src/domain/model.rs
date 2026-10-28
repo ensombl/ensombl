@@ -108,11 +108,3 @@ pub struct ArchModel {
     pub symbols: Vec<SymbolNode>,
     pub edges: Vec<Edge>,
 }
-
-#[derive(Debug, Clone, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub struct AppInfo {
-    pub name: String,
-    pub version: String,
-}

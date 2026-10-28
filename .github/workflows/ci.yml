@@ -47,4 +47,4 @@ jobs:
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Bindings are up to date
-        run: git diff --exit-code src/bindings
+        run: git diff --exit-code src/shared/bindings
