@@ -24,6 +24,7 @@ export function App() {
           <div
             key={worktree.id}
             className={cn("absolute inset-0 flex", worktree.id !== session?.active && "invisible")}
+            data-inactive={worktree.id !== session?.active || undefined}
           >
             <WorkspaceProvider worktree={worktree} active={worktree.id === session?.active}>
               <WorkspaceView />
