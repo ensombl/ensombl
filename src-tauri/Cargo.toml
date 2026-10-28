@@ -23,6 +23,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 ensombl-core = { path = "../crates/ensombl-core" }
 ensombl-server = { path = "../crates/ensombl-server" }
+ensombl-mcp = { path = "../crates/ensombl-mcp" }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2.8.4"
