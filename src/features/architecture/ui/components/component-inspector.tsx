@@ -123,7 +123,7 @@ export function ComponentInspector({ system, node, onNavigate, onShowCode, onClo
   const peek = (file: string, line: number) => openPeek(worktree.id, { file, line, title: file.split("/").pop() ?? file })
 
   return (
-    <aside className="@container absolute inset-x-3 bottom-3 z-20 flex max-h-[48%] flex-col overflow-hidden rounded-xl border bg-popover/95 text-popover-foreground shadow-lg backdrop-blur">
+    <aside className="@container absolute inset-x-3 bottom-3 z-20 flex max-h-[48%] flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg">
       <header className="flex items-center gap-2 border-b p-2 pl-3">
         <NodeIcon node={node} className="size-4 shrink-0" />
         {editable ? (

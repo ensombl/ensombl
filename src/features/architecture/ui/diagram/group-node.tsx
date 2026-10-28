@@ -63,7 +63,7 @@ function GroupNodeView({ id, data, selected }: NodeProps<GroupFlowNode>) {
       onDoubleClick={toggle}
       title={data.title}
       className={cn(
-        "relative flex h-full w-full items-center gap-2.5 rounded-lg border border-l-4 bg-card px-2.5 text-card-foreground shadow-sm transition-colors hover:bg-accent/40",
+        "relative flex h-full w-full items-center gap-2.5 rounded-lg border border-l-4 bg-card px-2.5 text-card-foreground hover:bg-accent/40",
         !isPackage && "border-dashed",
         selected && "ring-2 ring-ring",
       )}

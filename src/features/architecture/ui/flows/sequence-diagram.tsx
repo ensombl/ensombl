@@ -29,7 +29,7 @@ export const SequenceDiagram = memo(function SequenceDiagram({ sequence, nodes, 
 
   return (
     <div className="relative" style={{ width, height }}>
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur" style={{ width, height: HEADER }}>
+      <div className="sticky top-0 z-10 bg-background" style={{ width, height: HEADER }}>
         {sequence.participants.map((id, i) => {
           const node = nodes.get(id)
           return (

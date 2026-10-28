@@ -113,7 +113,7 @@ export function SymbolInspector({ model, symbol, onNavigate, onClose }: SymbolIn
   }, [model, symbol.id])
 
   return (
-    <aside className="flex h-full w-[340px] shrink-0 flex-col border-l bg-background">
+    <aside className="absolute inset-x-3 bottom-3 z-20 flex max-h-[48%] flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg">
       <header className="flex items-start gap-2 border-b p-4">
         <KindBadge kind={symbol.kind} className="mt-0.5" />
         <div className="min-w-0 flex-1">
