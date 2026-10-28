@@ -17,7 +17,7 @@ use ensombl_core::application::commands::review::{
 };
 use ensombl_core::application::commands::tasks::{
     ApproveTask, CancelTask, CreateTask, DeleteTask, QueueTask, RespondToTask, RetryTask,
-    SendFollowUp,
+    SendFollowUp, UpdateTaskBranch,
 };
 use ensombl_core::application::commands::terminals::{
     AttachTerminal, CloseTerminal, ResizeTerminal, StartTerminal, WithSink, WriteTerminal,
@@ -37,7 +37,7 @@ use ensombl_core::application::queries::review::{
     GetSettings, ListComments, ReadSource, SourceText,
 };
 use ensombl_core::application::queries::tasks::{
-    GetRunLog, GetTask, GetTaskDiff, ListTasks, TaskDetail,
+    GetCoordination, GetRunLog, GetTask, GetTaskDiff, ListTasks, TaskCoordination, TaskDetail,
 };
 use ensombl_core::application::queries::terminals::{AgentAvailability, ListAgents, ListTerminals};
 use ensombl_core::application::queries::workspaces::{
@@ -417,5 +417,21 @@ pub async fn approve_task(handlers: State<'_, Arc<Handlers>>, input: ApproveTask
 
 #[tauri::command]
 pub async fn delete_task(handlers: State<'_, Arc<Handlers>>, input: DeleteTask) -> Result<()> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn get_coordination(
+    handlers: State<'_, Arc<Handlers>>,
+    input: GetCoordination,
+) -> Result<Vec<TaskCoordination>> {
+    blocking(&handlers.task_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn update_task_branch(
+    handlers: State<'_, Arc<Handlers>>,
+    input: UpdateTaskBranch,
+) -> Result<()> {
     blocking(&handlers.task_commands, move |h| h.handle(input)).await
 }

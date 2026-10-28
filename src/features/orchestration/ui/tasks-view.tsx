@@ -7,7 +7,7 @@ import { PaneEmpty } from "@/shared/ui/pane"
 import { useWorkspace } from "@/shared/workspace/workspace-context"
 
 import { useTaskEvents } from "../model/use-task-events"
-import { useTasks } from "../queries/task-queries"
+import { useCoordination, useTasks } from "../queries/task-queries"
 import { NewTaskDialog } from "./new-task-dialog"
 import { TaskBoard } from "./task-board"
 import { TaskDetailPanel } from "./task-detail"
@@ -18,6 +18,8 @@ export function TasksView() {
   const { data: tasks = [] } = useTasks(worktree.projectId)
   const [selected, setSelected] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const live = tasks.some((t) => t.status === "running" || t.status === "needsInput" || t.status === "review")
+  const { data: coordination = [] } = useCoordination(worktree.projectId, live)
   useTaskEvents()
   const open = tasks.some((t) => t.id === selected) ? selected : null
 
@@ -62,14 +64,20 @@ export function TasksView() {
           </Button>
         </div>
         <div className="min-h-0 flex-1">
-          <TaskBoard tasks={tasks} selected={open} onSelect={setSelected} />
+          <TaskBoard tasks={tasks} coordination={coordination} selected={open} onSelect={setSelected} />
         </div>
       </ResizablePanel>
       {open && (
         <>
           <ResizableHandle />
           <ResizablePanel id="task-detail" defaultSize="40" minSize="25" className="min-w-0">
-            <TaskDetailPanel key={open} taskId={open} onClose={() => setSelected(null)} />
+            <TaskDetailPanel
+              key={open}
+              taskId={open}
+              coordination={coordination.find((c) => c.taskId === open)}
+              titleOf={(id) => tasks.find((t) => t.id === id)?.title ?? id}
+              onClose={() => setSelected(null)}
+            />
           </ResizablePanel>
         </>
       )}

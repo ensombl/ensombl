@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 
 import type { RunEvent } from "@/shared/bindings/RunEvent"
 import type { Task } from "@/shared/bindings/Task"
+import type { TaskCoordination } from "@/shared/bindings/TaskCoordination"
 import type { TaskDetail } from "@/shared/bindings/TaskDetail"
 import { query } from "@/shared/ipc/client"
 
@@ -11,6 +12,7 @@ export const taskKeys = {
   detail: (taskId: string) => [...taskKeys.all, "detail", taskId] as const,
   log: (runId: string) => [...taskKeys.all, "log", runId] as const,
   diff: (taskId: string) => [...taskKeys.all, "diff", taskId] as const,
+  coordination: (projectId: string) => [...taskKeys.all, "coordination", projectId] as const,
 }
 
 /** A project's orchestrated tasks, oldest first. */
@@ -43,5 +45,14 @@ export function useTaskDiff(taskId: string | null, enabled = true) {
     queryKey: taskKeys.diff(taskId ?? ""),
     queryFn: () => query<string>("get_task_diff", { input: { taskId } }),
     enabled: !!taskId && enabled,
+  })
+}
+
+/** Overlaps, conflicts and staleness of a project's active tasks; polled while any run. */
+export function useCoordination(projectId: string, live: boolean) {
+  return useQuery({
+    queryKey: taskKeys.coordination(projectId),
+    queryFn: () => query<TaskCoordination[]>("get_coordination", { input: { projectId } }),
+    refetchInterval: live ? 10_000 : false,
   })
 }

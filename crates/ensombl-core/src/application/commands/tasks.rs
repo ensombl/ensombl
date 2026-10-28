@@ -110,6 +110,14 @@ pub struct ApproveTask {
     pub task_id: TaskId,
 }
 
+/// Brings a task's branch up to date with its base (merging the base in).
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct UpdateTaskBranch {
+    pub task_id: TaskId,
+}
+
 /// Forgets a task, throwing away its worktree and branch.
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -140,6 +148,9 @@ impl Command for ApproveTask {
     type Output = Task;
 }
 impl Command for DeleteTask {
+    type Output = ();
+}
+impl Command for UpdateTaskBranch {
     type Output = ();
 }
 
@@ -642,9 +653,47 @@ impl CommandHandler<ApproveTask> for TaskCommands {
         )?;
         inner.clean_up(&task, false)?;
         let done = inner.apply(&task.id, TaskEvent::Approve)?;
+        // Other work in review on the same base catches up with this merge,
+        // where it can without conflicts; the rest shows as behind.
+        for other in inner.ports.tasks.list()? {
+            if other.status == TaskStatus::Review && other.base_branch == task.base_branch {
+                if let Some(worktree) = other.worktree.as_deref().filter(|w| Path::new(w).is_dir())
+                {
+                    let _ = inner
+                        .ports
+                        .task_git
+                        .update_from_base(Path::new(worktree), &other.base_branch);
+                }
+            }
+        }
         // Tasks waiting on this one can start now.
         Inner::dispatch(inner);
         Ok(done)
+    }
+}
+
+impl CommandHandler<UpdateTaskBranch> for TaskCommands {
+    fn handle(&self, cmd: UpdateTaskBranch) -> Result<()> {
+        let task = self.inner.get(&cmd.task_id)?;
+        if task.status.is_active() {
+            return Err(Error::Invalid(
+                "wait for the agent to stop before updating its branch".into(),
+            ));
+        }
+        let worktree = task
+            .worktree
+            .as_deref()
+            .filter(|w| Path::new(w).is_dir())
+            .ok_or_else(|| Error::Invalid("the task has no worktree".into()))?;
+        self.inner
+            .ports
+            .task_git
+            .commit_all(Path::new(worktree), &task.title)?;
+        self.inner
+            .ports
+            .task_git
+            .update_from_base(Path::new(worktree), &task.base_branch)?;
+        self.inner.save(&task)
     }
 }
 
@@ -806,6 +855,20 @@ mod tests {
         fn delete_branch(&self, _: &Path, branch: &str) -> Result<()> {
             self.branches.lock().unwrap().retain(|b| b != branch);
             self.calls.lock().unwrap().push(format!("delete {branch}"));
+            Ok(())
+        }
+        fn uncommitted(&self, _: &Path) -> Result<Vec<String>> {
+            Ok(vec![])
+        }
+        fn behind(&self, _: &Path, _: &str, _: &str) -> Result<usize> {
+            Ok(0)
+        }
+        fn update_from_base(&self, worktree: &Path, base: &str) -> Result<()> {
+            let task = worktree.file_name().unwrap().to_string_lossy();
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("update {task} from {base}"));
             Ok(())
         }
     }
@@ -1032,6 +1095,25 @@ mod tests {
         assert!(calls.contains(&format!("delete {}", parent.branch)));
         assert!(!Path::new(parent.worktree.as_deref().unwrap()).exists());
         assert_eq!(h.status(&child.id), TaskStatus::Running);
+    }
+
+    #[test]
+    fn approving_updates_other_reviewed_tasks_on_the_same_base() {
+        let h = Harness::new(2);
+        let a = h.create("a", vec![]);
+        let b = h.create("b", vec![]);
+        h.finish(0, "done");
+        h.finish(1, "done");
+        h.cmds
+            .handle(ApproveTask {
+                task_id: a.id.clone(),
+            })
+            .unwrap();
+        let calls = h.git.calls.lock().unwrap().clone();
+        assert!(
+            calls.contains(&format!("update task-{} from main", b.id)),
+            "{calls:?}"
+        );
     }
 
     #[test]

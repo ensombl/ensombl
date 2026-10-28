@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { PendingInput } from "@/shared/bindings/PendingInput"
 import type { Task } from "@/shared/bindings/Task"
+import type { TaskCoordination } from "@/shared/bindings/TaskCoordination"
 import { PaneEmpty } from "@/shared/ui/pane"
 
 import { useStartTerminal } from "@/features/agents/commands/terminal-commands"
@@ -193,8 +194,58 @@ function FollowUp({ task }: { task: Task }) {
   )
 }
 
+/** Where the task stands against its base and the other tasks. */
+function Coordination({ task, coordination, titleOf }: { task: Task; coordination: TaskCoordination; titleOf: (id: string) => string }) {
+  const { update } = useTaskCommands()
+  const { behind, conflicts, overlaps } = coordination
+  if (!behind && !conflicts.length && !overlaps.length) return null
+  const idle = task.status === "review"
+  return (
+    <div className="space-y-1.5 border-b p-3 text-xs">
+      {behind > 0 && (
+        <p className="flex items-center gap-2 text-muted-foreground">
+          <GitBranch className="size-3.5" />
+          {behind} commit{behind > 1 ? "s" : ""} behind {task.baseBranch}
+          {idle && !conflicts.length && (
+            <Button size="sm" variant="outline" className="ml-auto h-6 text-xs" disabled={update.isPending} onClick={() => update.mutate({ taskId: task.id })}>
+              <RotateCcw /> Update from {task.baseBranch}
+            </Button>
+          )}
+        </p>
+      )}
+      {conflicts.length > 0 && (
+        <p className="flex gap-2 text-red-300">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            Conflicts with {task.baseBranch} in <span className="font-mono">{conflicts.join(", ")}</span>. Send a follow-up asking the agent to merge {task.baseBranch} and resolve them.
+          </span>
+        </p>
+      )}
+      {overlaps.map((o) => (
+        <p key={o.taskId} className="flex gap-2 text-amber-200">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            Also changed by “{titleOf(o.taskId)}”: <span className="font-mono">{o.files.slice(0, 5).join(", ")}</span>
+            {o.files.length > 5 && ` +${o.files.length - 5}`}
+          </span>
+        </p>
+      ))}
+    </div>
+  )
+}
+
 /** One task: what it's doing, what it changed, and what you can do about it. */
-export function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => void }) {
+export function TaskDetailPanel({
+  taskId,
+  coordination,
+  titleOf,
+  onClose,
+}: {
+  taskId: string
+  coordination?: TaskCoordination
+  titleOf: (id: string) => string
+  onClose: () => void
+}) {
   const { data } = useTask(taskId)
   const commands = useTaskCommands()
   const [runId, setRunId] = useState<string | null>(null)
@@ -262,6 +313,7 @@ export function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: 
         </div>
       </header>
       {pending && <Pending task={task} pending={pending} />}
+      {coordination && <Coordination task={task} coordination={coordination} titleOf={titleOf} />}
       <Tabs defaultValue="activity" className="min-h-0 flex-1 gap-0">
         <div className="flex items-center gap-2 border-b px-2 py-1.5">
           <TabsList className="h-7">
