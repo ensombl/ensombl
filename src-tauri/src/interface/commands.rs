@@ -4,8 +4,12 @@
 use std::sync::Arc;
 
 use tauri::State;
+use tauri::ipc::{Channel, InvokeResponseBody};
 
 use crate::application::commands::indexing::{DropIndex, IndexSummary, IndexWorktree};
+use crate::application::commands::terminals::{
+    AttachTerminal, CloseTerminal, ResizeTerminal, StartTerminal, WithSink, WriteTerminal,
+};
 use crate::application::commands::workspaces::{
     ActivateTab, AddProject, CloseTab, CreateWorktree, OpenWorktree, RemoveProject, RemoveWorktree,
     ToggleGroup,
@@ -13,14 +17,17 @@ use crate::application::commands::workspaces::{
 use crate::application::cqrs::{CommandHandler, QueryHandler};
 use crate::application::queries::get_app_info::{AppInfo, GetAppInfo};
 use crate::application::queries::model::GetModel;
+use crate::application::queries::terminals::{AgentAvailability, ListAgents, ListTerminals};
 use crate::application::queries::workspaces::{
     GetSession, ListBranches, ListWorktrees, SessionView, WorktreeListing,
 };
 use crate::application::{Error, Result};
 use crate::domain::model::ArchModel;
+use crate::domain::terminal::TerminalInfo;
 use crate::domain::workspace::WorktreeId;
 
 use super::state::Handlers;
+use super::terminal_sink::ChannelSink;
 
 async fn blocking<H, T>(
     handler: &Arc<H>,
@@ -69,7 +76,64 @@ pub fn get_model(handlers: State<'_, Handlers>, input: GetModel) -> Result<Optio
     handlers.model_queries.handle(input)
 }
 
+#[tauri::command]
+pub async fn list_agents(handlers: State<'_, Handlers>) -> Result<Vec<AgentAvailability>> {
+    blocking(&handlers.terminal_queries, |h| h.handle(ListAgents)).await
+}
+
+#[tauri::command]
+pub fn list_terminals(
+    handlers: State<'_, Handlers>,
+    input: ListTerminals,
+) -> Result<Vec<TerminalInfo>> {
+    handlers.terminal_queries.handle(input)
+}
+
 // Commands
+
+#[tauri::command]
+pub async fn start_terminal(
+    handlers: State<'_, Handlers>,
+    input: StartTerminal,
+    output: Channel<InvokeResponseBody>,
+) -> Result<TerminalInfo> {
+    let sink = Arc::new(ChannelSink(output));
+    blocking(&handlers.terminal_commands, move |h| {
+        h.handle(WithSink {
+            command: input,
+            sink,
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub fn attach_terminal(
+    handlers: State<'_, Handlers>,
+    input: AttachTerminal,
+    output: Channel<InvokeResponseBody>,
+) -> Result<TerminalInfo> {
+    let sink = Arc::new(ChannelSink(output));
+    handlers.terminal_commands.handle(WithSink {
+        command: input,
+        sink,
+    })
+}
+
+#[tauri::command]
+pub fn write_terminal(handlers: State<'_, Handlers>, input: WriteTerminal) -> Result<()> {
+    handlers.terminal_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn resize_terminal(handlers: State<'_, Handlers>, input: ResizeTerminal) -> Result<()> {
+    handlers.terminal_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn close_terminal(handlers: State<'_, Handlers>, input: CloseTerminal) -> Result<()> {
+    handlers.terminal_commands.handle(input)
+}
 
 #[tauri::command]
 pub async fn index_worktree(

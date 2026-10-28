@@ -8,17 +8,22 @@ use std::sync::{Arc, mpsc};
 use tauri::Manager;
 
 use application::commands::indexing::{IndexingCommands, IndexingPorts, ReindexPaths};
+use application::commands::terminals::{TerminalCommands, TerminalRegistry};
 use application::commands::workspaces::WorkspaceCommands;
 use application::cqrs::CommandHandler;
 use application::index_registry::IndexRegistry;
 use application::ports::SourceScanner;
 use application::queries::get_app_info::GetAppInfoHandler;
 use application::queries::model::ModelQueries;
+use application::queries::terminals::TerminalQueries;
 use application::queries::workspaces::WorkspaceQueries;
+use domain::terminal::AgentProfile;
 use infrastructure::build_info::CargoBuildInfo;
 use infrastructure::fs_scanner::FsScanner;
 use infrastructure::git_cli::GitCli;
 use infrastructure::json_sessions::JsonSessions;
+use infrastructure::login_shell::LoginShell;
+use infrastructure::native_pty::NativePty;
 use infrastructure::notify_watcher::{ChangeBatch, NotifyWatcher};
 use infrastructure::sqlite_cache::SqliteCache;
 use infrastructure::ts_parser::TreeSitterParser;
@@ -70,6 +75,11 @@ pub fn run() {
                 }
             });
 
+            let shell = Arc::new(LoginShell::detect());
+            let terminals = Arc::new(TerminalRegistry::default());
+            let profiles = AgentProfile::builtin();
+
+            app.manage(terminals.clone());
             app.manage(Handlers {
                 get_app_info: GetAppInfoHandler::new(Arc::new(CargoBuildInfo)),
                 workspace_commands: Arc::new(WorkspaceCommands::new(
@@ -77,9 +87,17 @@ pub fn run() {
                     sessions.clone(),
                     worktrees_dir,
                 )),
-                workspace_queries: Arc::new(WorkspaceQueries::new(git, sessions)),
+                workspace_queries: Arc::new(WorkspaceQueries::new(git, sessions.clone())),
                 indexing_commands: indexing,
                 model_queries: Arc::new(ModelQueries::new(registry)),
+                terminal_commands: Arc::new(TerminalCommands::new(
+                    sessions,
+                    shell.clone(),
+                    Arc::new(NativePty),
+                    terminals.clone(),
+                    profiles.clone(),
+                )),
+                terminal_queries: Arc::new(TerminalQueries::new(shell, terminals, profiles)),
             });
             Ok(())
         })
@@ -99,7 +117,20 @@ pub fn run() {
             cmd::remove_project,
             cmd::index_worktree,
             cmd::drop_index,
+            cmd::list_agents,
+            cmd::list_terminals,
+            cmd::start_terminal,
+            cmd::attach_terminal,
+            cmd::write_terminal,
+            cmd::resize_terminal,
+            cmd::close_terminal,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Don't leave agent processes behind.
+            if let tauri::RunEvent::Exit = event {
+                app.state::<Arc<TerminalRegistry>>().kill_all();
+            }
+        });
 }

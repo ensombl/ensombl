@@ -105,3 +105,49 @@ pub trait IndexEvents: Send + Sync {
     /// The model changed; `changed` lists symbol ids that were added or modified.
     fn updated(&self, worktree: &str, changed: &[String], removed: &[String]);
 }
+
+// Terminals
+
+/// What to run in a PTY.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpawnSpec {
+    pub program: PathBuf,
+    pub args: Vec<String>,
+    pub cwd: PathBuf,
+    pub env: Vec<(String, String)>,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+/// Control side of a running PTY process.
+pub trait PtyControl: Send {
+    fn write(&mut self, data: &[u8]) -> Result<()>;
+    fn resize(&mut self, cols: u16, rows: u16) -> Result<()>;
+    fn kill(&mut self);
+    /// Blocks until the process exits.
+    fn wait(&mut self) -> Option<i32>;
+}
+
+pub struct SpawnedPty {
+    pub output: Box<dyn std::io::Read + Send>,
+    pub control: Box<dyn PtyControl>,
+}
+
+pub trait PtySpawner: Send + Sync {
+    fn spawn(&self, spec: SpawnSpec) -> Result<SpawnedPty>;
+}
+
+/// The user's login-shell environment (GUI apps on macOS don't inherit it).
+pub trait ShellEnvironment: Send + Sync {
+    fn shell(&self) -> PathBuf;
+    /// Resolves a program on the login PATH.
+    fn find(&self, program: &str) -> Option<PathBuf>;
+    /// Environment for spawned agents.
+    fn env(&self) -> Vec<(String, String)>;
+}
+
+/// Where a terminal's output goes; swapped when a view re-attaches.
+pub trait TerminalSink: Send + Sync {
+    fn output(&self, bytes: &[u8]);
+    fn exited(&self, code: Option<i32>);
+}

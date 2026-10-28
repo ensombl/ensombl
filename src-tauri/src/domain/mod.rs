@@ -5,4 +5,5 @@
 pub mod linker;
 pub mod model;
 pub mod parsed;
+pub mod terminal;
 pub mod workspace;
