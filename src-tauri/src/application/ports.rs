@@ -167,3 +167,39 @@ pub trait PatternDecisions: Send + Sync {
         decision: Option<crate::domain::patterns::PatternDecision>,
     ) -> Result<()>;
 }
+
+// Review comments and settings
+
+/// Review comments, stored per worktree.
+pub trait CommentStore: Send + Sync {
+    fn load(&self, worktree: &str) -> Vec<crate::domain::review::ReviewComment>;
+    fn save(&self, worktree: &str, comments: &[crate::domain::review::ReviewComment])
+    -> Result<()>;
+}
+
+/// App-wide user settings.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct Settings {
+    /// Command to open a file at a line. `{file}` and `{line}` are substituted.
+    pub editor_command: String,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            editor_command: "nvim +{line} {file}".into(),
+        }
+    }
+}
+
+pub trait SettingsRepository: Send + Sync {
+    fn get(&self) -> Settings;
+    fn set(&self, settings: Settings) -> Result<()>;
+}
+
+/// Starts a GUI program detached from CRM.
+pub trait DetachedLauncher: Send + Sync {
+    fn launch(&self, command_line: &str, cwd: &Path, env: &[(String, String)]) -> Result<()>;
+}

@@ -9,25 +9,29 @@ use tauri::Manager;
 
 use application::commands::indexing::{IndexingCommands, IndexingPorts, ReindexPaths};
 use application::commands::patterns::PatternCommands;
+use application::commands::review::ReviewCommands;
 use application::commands::terminals::{TerminalCommands, TerminalRegistry};
 use application::commands::workspaces::WorkspaceCommands;
 use application::cqrs::CommandHandler;
 use application::index_registry::IndexRegistry;
-use application::ports::SourceScanner;
+use application::ports::{ShellEnvironment, SourceScanner};
 use application::queries::get_app_info::GetAppInfoHandler;
 use application::queries::model::ModelQueries;
 use application::queries::patterns::PatternQueries;
+use application::queries::review::ReviewQueries;
 use application::queries::terminals::TerminalQueries;
 use application::queries::workspaces::WorkspaceQueries;
 use domain::terminal::AgentProfile;
 use infrastructure::build_info::CargoBuildInfo;
 use infrastructure::fs_scanner::FsScanner;
 use infrastructure::git_cli::GitCli;
+use infrastructure::json_comments::{JsonComments, JsonSettings};
 use infrastructure::json_decisions::JsonDecisions;
 use infrastructure::json_sessions::JsonSessions;
 use infrastructure::login_shell::LoginShell;
 use infrastructure::native_pty::NativePty;
 use infrastructure::notify_watcher::{ChangeBatch, NotifyWatcher};
+use infrastructure::shell_launcher::ShellLauncher;
 use infrastructure::sqlite_cache::SqliteCache;
 use infrastructure::ts_parser::TreeSitterParser;
 use infrastructure::ts_resolver::TsResolverFactory;
@@ -83,6 +87,16 @@ pub fn run() {
             let terminals = Arc::new(TerminalRegistry::default());
             let profiles = AgentProfile::builtin();
 
+            let terminal_commands = Arc::new(TerminalCommands::new(
+                sessions.clone(),
+                shell.clone(),
+                Arc::new(NativePty),
+                terminals.clone(),
+                profiles.clone(),
+            ));
+            let comments = Arc::new(JsonComments::open(data_dir.join("comments.json")));
+            let settings = Arc::new(JsonSettings::open(data_dir.join("settings.json")));
+
             app.manage(terminals.clone());
             app.manage(Handlers {
                 get_app_info: GetAppInfoHandler::new(Arc::new(CargoBuildInfo)),
@@ -103,14 +117,23 @@ pub fn run() {
                     registry,
                     decisions,
                 )),
-                terminal_commands: Arc::new(TerminalCommands::new(
-                    sessions,
+                terminal_commands: terminal_commands.clone(),
+                terminal_queries: Arc::new(TerminalQueries::new(
                     shell.clone(),
-                    Arc::new(NativePty),
-                    terminals.clone(),
-                    profiles.clone(),
+                    terminals,
+                    profiles,
                 )),
-                terminal_queries: Arc::new(TerminalQueries::new(shell, terminals, profiles)),
+                review_commands: Arc::new(ReviewCommands::new(
+                    sessions.clone(),
+                    comments.clone(),
+                    settings.clone(),
+                    shell.clone(),
+                    Arc::new(ShellLauncher {
+                        shell: shell.shell(),
+                    }),
+                    terminal_commands,
+                )),
+                review_queries: Arc::new(ReviewQueries::new(sessions, comments, settings)),
             });
             Ok(())
         })
@@ -132,6 +155,14 @@ pub fn run() {
             cmd::drop_index,
             cmd::get_patterns,
             cmd::set_pattern_decision,
+            cmd::read_source,
+            cmd::list_comments,
+            cmd::get_settings,
+            cmd::add_comment,
+            cmd::resolve_comment,
+            cmd::delete_comment,
+            cmd::update_settings,
+            cmd::open_in_editor,
             cmd::list_agents,
             cmd::list_terminals,
             cmd::start_terminal,

@@ -8,6 +8,9 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 
 use crate::application::commands::indexing::{DropIndex, IndexSummary, IndexWorktree};
 use crate::application::commands::patterns::SetPatternDecision;
+use crate::application::commands::review::{
+    AddComment, DeleteComment, EditorLaunch, OpenInEditor, ResolveComment, UpdateSettings,
+};
 use crate::application::commands::terminals::{
     AttachTerminal, CloseTerminal, ResizeTerminal, StartTerminal, WithSink, WriteTerminal,
 };
@@ -16,15 +19,18 @@ use crate::application::commands::workspaces::{
     ToggleGroup,
 };
 use crate::application::cqrs::{CommandHandler, QueryHandler};
+use crate::application::ports::Settings;
 use crate::application::queries::get_app_info::{AppInfo, GetAppInfo};
 use crate::application::queries::model::GetModel;
 use crate::application::queries::patterns::{GetPatterns, PatternView};
+use crate::application::queries::review::{GetSettings, ListComments, ReadSource, SourceText};
 use crate::application::queries::terminals::{AgentAvailability, ListAgents, ListTerminals};
 use crate::application::queries::workspaces::{
     GetSession, ListBranches, ListWorktrees, SessionView, WorktreeListing,
 };
 use crate::application::{Error, Result};
 use crate::domain::model::ArchModel;
+use crate::domain::review::{AnchoredComment, ReviewComment};
 use crate::domain::terminal::TerminalInfo;
 use crate::domain::workspace::WorktreeId;
 
@@ -99,7 +105,56 @@ pub async fn get_patterns(
     blocking(&handlers.pattern_queries, move |h| h.handle(input)).await
 }
 
+#[tauri::command]
+pub async fn read_source(handlers: State<'_, Handlers>, input: ReadSource) -> Result<SourceText> {
+    blocking(&handlers.review_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn list_comments(
+    handlers: State<'_, Handlers>,
+    input: ListComments,
+) -> Result<Vec<AnchoredComment>> {
+    blocking(&handlers.review_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub fn get_settings(handlers: State<'_, Handlers>) -> Result<Settings> {
+    handlers.review_queries.handle(GetSettings)
+}
+
 // Commands
+
+#[tauri::command]
+pub async fn add_comment(
+    handlers: State<'_, Handlers>,
+    input: AddComment,
+) -> Result<ReviewComment> {
+    blocking(&handlers.review_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub fn resolve_comment(handlers: State<'_, Handlers>, input: ResolveComment) -> Result<()> {
+    handlers.review_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn delete_comment(handlers: State<'_, Handlers>, input: DeleteComment) -> Result<()> {
+    handlers.review_commands.handle(input)
+}
+
+#[tauri::command]
+pub fn update_settings(handlers: State<'_, Handlers>, input: UpdateSettings) -> Result<()> {
+    handlers.review_commands.handle(input)
+}
+
+#[tauri::command]
+pub async fn open_in_editor(
+    handlers: State<'_, Handlers>,
+    input: OpenInEditor,
+) -> Result<EditorLaunch> {
+    blocking(&handlers.review_commands, move |h| h.handle(input)).await
+}
 
 #[tauri::command]
 pub fn set_pattern_decision(
