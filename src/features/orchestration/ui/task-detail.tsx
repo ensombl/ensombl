@@ -140,7 +140,7 @@ function TakeOver({ task }: { task: Task }) {
       <Button
         size="sm"
         disabled={!canStart || start.isPending}
-        onClick={() => start.mutate({ worktreeId, profileId: "claude", cols: 100, rows: 30, resume: task.sessionId ?? undefined })}
+        onClick={() => start.mutate({ worktreeId, profileId: task.agent, cols: 100, rows: 30, resume: task.sessionId ?? undefined })}
       >
         <SquareTerminal /> Open terminal
       </Button>

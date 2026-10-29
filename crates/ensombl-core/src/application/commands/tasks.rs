@@ -415,6 +415,13 @@ impl Inner {
                     AgentKind::Claude => {
                         vec!["--append-system-prompt".into(), TASK_INSTRUCTIONS.into()]
                     }
+                    AgentKind::Codex => vec![
+                        "-c".into(),
+                        format!(
+                            "developer_instructions={}",
+                            serde_json::Value::from(TASK_INSTRUCTIONS)
+                        ),
+                    ],
                     _ => vec![],
                 },
                 cwd: worktree,
@@ -778,7 +785,7 @@ impl CommandHandler<StartWorkflow> for TaskCommands {
                 project_id: cmd.project_id.clone(),
                 title: planned.title,
                 prompt: planned.prompt,
-                agent: AgentKind::Claude,
+                agent: planned.agent,
                 base_branch: cmd.base_branch.clone(),
                 worktree: None,
                 status: TaskStatus::Queued,
@@ -1552,6 +1559,25 @@ mod smoke {
     #[test]
     #[ignore]
     fn real_claude_task() {
+        real_task(
+            AgentKind::Claude,
+            Arc::new(ClaudeCode),
+            "Create a file notes.txt containing exactly the word hi, using the Write tool. Then reply done.",
+        );
+    }
+
+    /// `cargo test -p ensombl-core real_codex_task -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn real_codex_task() {
+        real_task(
+            AgentKind::Codex,
+            Arc::new(crate::infrastructure::codex_exec::Codex),
+            "Create a file notes.txt containing exactly the word hi, with no trailing newline. Then reply done.",
+        );
+    }
+
+    fn real_task(agent: AgentKind, runtime: Arc<dyn AgentRuntime>, prompt: &str) {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
         std::fs::create_dir_all(&repo).unwrap();
@@ -1575,7 +1601,7 @@ mod smoke {
         session.add_project("p".into(), "demo".into(), repo.to_string_lossy().into());
         let tasks = Arc::new(SqliteTasks::in_memory().unwrap());
         let mut runtimes: HashMap<AgentKind, Arc<dyn AgentRuntime>> = HashMap::new();
-        runtimes.insert(AgentKind::Claude, Arc::new(ClaudeCode));
+        runtimes.insert(agent, runtime);
         let cmds = TaskCommands::new(TaskPorts {
             tasks: tasks.clone(),
             log: Arc::new(JsonlRunLog::new(dir.path().join("runs"))),
@@ -1596,8 +1622,8 @@ mod smoke {
             .handle(CreateTask {
                 project_id: "p".into(),
                 title: "Add notes".into(),
-                prompt: "Create a file notes.txt containing exactly the word hi, using the Write tool. Then reply done.".into(),
-                agent: AgentKind::Claude,
+                prompt: prompt.into(),
+                agent,
                 base_branch: "main".into(),
                 depends_on: vec![],
                 permission: PermissionMode::AcceptEdits,

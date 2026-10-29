@@ -14,6 +14,7 @@
 //!     matrix: [api, web]
 //!   - id: review
 //!     prompt: Review the changes and fix anything broken.
+//!     agent: codex
 //! ```
 //!
 //! Steps run after the previous step unless `after` names others. `{{input}}`
@@ -24,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::agent_run::PermissionMode;
+use super::terminal::AgentKind;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -41,6 +43,9 @@ pub struct Step {
     #[serde(default)]
     pub title: Option<String>,
     pub prompt: String,
+    /// `claude` (the default) or `codex`.
+    #[serde(default)]
+    pub agent: Option<AgentKind>,
     #[serde(default)]
     pub permission: Option<PermissionMode>,
     /// Merge as soon as it finishes, so the pipeline keeps moving.
@@ -70,6 +75,7 @@ pub struct PlannedTask {
     pub step: String,
     pub title: String,
     pub prompt: String,
+    pub agent: AgentKind,
     pub permission: PermissionMode,
     pub auto_approve: bool,
     /// Indexes into the plan of the tasks this waits for.
@@ -90,6 +96,9 @@ fn validate(workflow: &Workflow) -> Result<(), String> {
     for step in &workflow.steps {
         if step.id.trim().is_empty() {
             return Err("every step needs an id".into());
+        }
+        if matches!(step.agent, Some(AgentKind::Shell | AgentKind::Custom)) {
+            return Err(format!("step {} needs agent claude or codex", step.id));
         }
         if seen.contains(&step.id.as_str()) {
             return Err(format!("step id {} is used twice", step.id));
@@ -153,6 +162,7 @@ pub fn expand(workflow: &Workflow, input: &str) -> Vec<PlannedTask> {
                 step: step.id.clone(),
                 title,
                 prompt: render(&step.prompt, input, item),
+                agent: step.agent.unwrap_or(AgentKind::Claude),
                 permission: step.permission.unwrap_or(PermissionMode::AcceptEdits),
                 auto_approve: step.auto_approve,
                 depends_on: waits_for.clone(),
@@ -180,6 +190,7 @@ steps:
     matrix: [api, web]
   - id: review
     prompt: Review it.
+    agent: codex
     permission: default
   - id: docs
     prompt: Document {{input}}
@@ -208,6 +219,8 @@ steps:
         // The step after a matrix waits for all of it.
         assert_eq!(plan[3].depends_on, [1, 2]);
         assert_eq!(plan[3].permission, PermissionMode::Default);
+        assert_eq!(plan[3].agent, AgentKind::Codex);
+        assert_eq!(plan[0].agent, AgentKind::Claude);
         // `after` reaches back past the previous step.
         assert_eq!(plan[4].depends_on, [0]);
     }

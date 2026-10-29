@@ -35,6 +35,7 @@ use crate::domain::model::ModelDelta;
 use crate::domain::terminal::{AgentKind, AgentProfile};
 use crate::infrastructure::build_info::CargoBuildInfo;
 use crate::infrastructure::claude_headless::ClaudeCode;
+use crate::infrastructure::codex_exec::Codex;
 use crate::infrastructure::fs_scanner::FsScanner;
 use crate::infrastructure::fs_workflows::FsWorkflows;
 use crate::infrastructure::git_cli::GitCli;
@@ -219,6 +220,7 @@ impl Core {
 
         let mut runtimes: HashMap<AgentKind, Arc<dyn AgentRuntime>> = HashMap::new();
         runtimes.insert(AgentKind::Claude, Arc::new(ClaudeCode));
+        runtimes.insert(AgentKind::Codex, Arc::new(Codex));
         let task_commands = Arc::new(TaskCommands::new(TaskPorts {
             tasks: tasks.clone(),
             log: run_log.clone(),
