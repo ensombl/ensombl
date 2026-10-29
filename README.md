@@ -27,7 +27,7 @@ You need no API keys. Ensombl runs the real agent CLIs, so they use your existin
 
 Download the latest build from [Releases](https://github.com/ensombl/ensombl/releases):
 
-- macOS (Apple Silicon or Intel): `.dmg`
+- macOS (Apple Silicon): `.dmg`
 - Linux: `.AppImage` or `.deb`
 - Windows: `.msi`
 
