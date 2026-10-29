@@ -100,9 +100,23 @@ async fn authorize(State(state): State<AppState>, request: Request, next: Next) 
 async fn call(
     State(state): State<AppState>,
     Path(name): Path<String>,
-    body: Option<Json<Value>>,
+    body: axum::body::Bytes,
 ) -> Response {
-    let input = body.map(|Json(v)| v).unwrap_or(Value::Null);
+    // JSON whatever the Content-Type, so a bare `curl -d` works.
+    let input = if body.iter().all(u8::is_ascii_whitespace) {
+        Value::Null
+    } else {
+        match serde_json::from_slice(&body) {
+            Ok(v) => v,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "error": format!("body isn't JSON: {e}") })),
+                )
+                    .into_response();
+            }
+        }
+    };
     let handlers = state.handlers.clone();
     let result = tokio::task::spawn_blocking(move || rpc::call(&handlers, &name, input)).await;
     match result {

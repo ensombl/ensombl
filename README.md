@@ -2,59 +2,36 @@
 
 Where clankers come together.
 
-Ensombl is an architecture-first desktop editor for coding agents (clankers). It keeps a live UML diagram of the whole codebase on screen next to the agent you're driving (`claude`, `codex` or any CLI). You can expand any component to see its signatures, and you can `@`-tag classes, methods and detected design patterns in your prompts the way you tag files today.
+Ensombl is a desktop app for working with coding agents (clankers). It shows a live architecture view of your codebase beside the agents you run (`claude`, `codex` or a shell), and it orchestrates many agents at once: you hand out tasks, each runs on its own branch, and you review and merge the results.
 
-You need no API keys: Ensombl runs the real agent CLIs in an embedded terminal, so they use your existing logins.
+You need no API keys. Ensombl runs the real agent CLIs, so they use your existing logins.
 
-## Projects, worktrees and tabs
+## What's in it
 
-A **project** is a git repository, and every **tab** is one of its **git worktrees**. Tabs are grouped by project in the title bar, like browser tab groups. Each worktree is an isolated workspace with its own UML index, agent terminals and file watcher, so several agents can work in parallel on separate branches. New worktrees are created under `~/.crm/worktrees/<project>/<branch>`.
-
-## Stack
-
-- **Tauri 2**: Rust backend (indexing, PTYs, file watching) with a React + TypeScript frontend
-- **tree-sitter** for TS/JS symbol extraction, **React Flow + ELK** for the diagram, **xterm.js** for the agents
-
-## Architecture
-
-Ensombl follows **Clean Architecture** with **CQRS**: every use case is either a *command*, which changes state, or a *query*, which reads state, and each has exactly one handler. Dependencies point inward only.
-
-```
-src-tauri/src/
-  domain/           entities, value objects, pure rules (no IO)
-  application/
-    cqrs.rs         Command/Query traits + handler traits
-    commands/       state-changing use cases
-    queries/        read-only use cases
-    ports.rs        traits that infrastructure implements
-  infrastructure/   adapters: tree-sitter, sqlite, fs watcher, pty, ...
-  interface/        thin #[tauri::command]s that dispatch to handlers
-  lib.rs            composition root: wires adapters into handlers
-
-src/
-  app/              composition: providers, layout, top-level screen
-  features/<name>/
-    queries/        useQuery hooks over backend queries
-    commands/       useMutation hooks over backend commands
-    model/          client-only UI state (zustand)
-    ui/             feature components (shadcn/ui only)
-  shared/
-    ipc/client.ts   the only module that talks to Tauri (`query` / `command`)
-    bindings/       TS types generated from Rust by ts-rs
-    ui/             shared shadcn compositions
-  components/ui/    shadcn/ui primitives (generated)
-```
-
-Rules:
-- UI never calls IPC directly; it goes through a feature's query or command.
-- Interface-layer Tauri commands contain no logic; they build the message and dispatch it.
-- Handlers depend on ports (traits), never on concrete adapters.
+- **Projects, worktrees and tabs.** A project is a git repository, and each tab is one of its worktrees, grouped by project in the title bar. Each worktree has its own index, agents and file watcher.
+- **Architecture views.** Components and how they talk to each other, a class diagram, and a Code tab with an editor and review comments.
+- **Agents.** Interactive CLI terminals in the worktree. Start one with **+** in the Agents pane.
+- **Tasks.** The Tasks tab hands work to headless agents:
+  - Each task runs alone in its own worktree and branch, and waits in review until you approve it. Approving merges it.
+  - Tasks can wait on other tasks, and a task that waits on others starts with what they reported.
+  - Ensombl warns when tasks touch the same files or would conflict with their base.
+  - It caps how many run at once, shows what they've cost today, and can stop them all.
+  - You can take over any task in a terminal.
+  - Tasks run on Claude Code or Codex.
+- **Lead agent.** In the Agents pane, choose **+ → Start a lead** and pick the CLI that leads. The lead splits your request into tasks, watches them, asks for changes and merges the work, all through Ensombl's MCP tools.
+- **Workflows.** Pipelines kept in your repo as `.ensombl/workflows/*.yml`, with steps, parallel matrix steps and steps that merge themselves. See [docs/workflows.md](docs/workflows.md).
+- **Headless.** The same engine runs without a window as `ensombl-server`, with an HTTP API and a live event stream. See [docs/headless.md](docs/headless.md).
+- **Updates.** The app checks for new releases and offers **Restart to update**. You can also check from the version badge in the title bar.
 
 ## Install
 
-Grab the latest build from [Releases](https://github.com/ensombl/ensombl/releases): `.dmg` for macOS (Apple Silicon or Intel), `.AppImage`/`.deb` for Linux, `.msi` for Windows. Builds aren't code-signed yet, so on macOS right-click the app and choose **Open** the first time.
+Download the latest build from [Releases](https://github.com/ensombl/ensombl/releases):
 
-To release: push a `v*` tag (for example `git tag v0.1.0 && git push --tags`). The Release workflow builds every platform and attaches the installers to a draft release.
+- macOS (Apple Silicon or Intel): `.dmg`
+- Linux: `.AppImage` or `.deb`
+- Windows: `.msi`
+
+After you install it, the app updates itself. Builds aren't notarized yet, so the first time you open it on macOS, right-click the app and choose **Open**.
 
 ## Develop
 
@@ -63,18 +40,21 @@ pnpm install
 pnpm tauri dev
 ```
 
-Build a local app bundle:
+Checks, which CI runs too:
 
 ```sh
-pnpm tauri build            # .app and .dmg under src-tauri/target/release/bundle
+pnpm lint && pnpm test                                 # frontend
+cargo test --workspace                                 # backend; regenerates src/shared/bindings
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
 ```
 
-Checks:
+Rust types shared with the frontend are exported to `src/shared/bindings/` by ts-rs when you run `cargo test -p ensombl-core`, so commit the regenerated files. CI fails if they're stale.
 
-```sh
-pnpm lint && pnpm test          # frontend
-pnpm test:rust                  # backend (also regenerates src/shared/bindings)
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-```
+How the code is laid out, including the core crate, the shells and the data each instance keeps, is in [docs/architecture.md](docs/architecture.md).
 
-Shared types live in `src-tauri/src/model.rs`. ts-rs exports them to `src/shared/bindings/` when you run `cargo test`, so commit the regenerated files.
+## Release
+
+1. Bump `version` in `package.json`, `src-tauri/tauri.conf.json` and the crates' `Cargo.toml` files.
+2. Push a tag, for example `git tag v0.2.0 && git push origin v0.2.0`.
+3. The Release workflow builds every platform and signs the update bundles with the `TAURI_SIGNING_PRIVATE_KEY` secret. It publishes the release together with the `latest.json` that installed apps poll.
