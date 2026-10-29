@@ -22,7 +22,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # The release workflow only runs on tags, so catch broken YAML here.
       - name: Workflows parse
-        run: ruby -ryaml -e 'Dir[".github/workflows/*.yml"].each { |f| YAML.safe_load(File.read(f), aliases: true) }'
+        run: |
+          ruby -ryaml -e 'Dir[".github/workflows/*.yml"].each { |f| YAML.safe_load(File.read(f), aliases: true) }'
       - run: pnpm lint
       - run: pnpm test
 
