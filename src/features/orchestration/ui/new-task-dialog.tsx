@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import type { AgentKind } from "@/shared/bindings/AgentKind"
 import type { PermissionMode } from "@/shared/bindings/PermissionMode"
 import type { Task } from "@/shared/bindings/Task"
 
@@ -22,6 +23,18 @@ const PERMISSIONS: { value: PermissionMode; label: string; hint: string }[] = [
   { value: "default", label: "Ask before anything", hint: "Every tool that isn't read-only waits for you." },
   { value: "bypassPermissions", label: "Don't ask", hint: "The agent runs anything in its worktree. Only for trusted prompts." },
   { value: "plan", label: "Plan only", hint: "The agent investigates and proposes a plan without changing files." },
+]
+
+/** Codex can't stop to ask when headless, so each mode is a sandbox instead. */
+const CODEX_HINTS: Partial<Record<PermissionMode, string>> = {
+  acceptEdits: "Codex can't ask when headless: it edits and runs commands inside its worktree, without network.",
+  default: "Codex can't ask when headless: it edits and runs commands inside its worktree, without network.",
+  bypassPermissions: "No sandbox. Codex runs anything. Only for trusted prompts.",
+}
+
+const AGENTS: { value: AgentKind; label: string }[] = [
+  { value: "claude", label: "Claude Code" },
+  { value: "codex", label: "Codex" },
 ]
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -50,6 +63,7 @@ export function NewTaskDialog({ projectId, defaultBase, tasks, open, onOpenChang
   const [title, setTitle] = useState("")
   const [prompt, setPrompt] = useState("")
   const [base, setBase] = useState(defaultBase)
+  const [agent, setAgent] = useState<AgentKind>("claude")
   const [permission, setPermission] = useState<PermissionMode>("acceptEdits")
   const [dependsOn, setDependsOn] = useState<string[]>([])
   const [queue, setQueue] = useState(true)
@@ -57,7 +71,7 @@ export function NewTaskDialog({ projectId, defaultBase, tasks, open, onOpenChang
 
   const submit = () =>
     create.mutate(
-      { projectId, title, prompt, agent: "claude", baseBranch: base, dependsOn, permission, queue },
+      { projectId, title, prompt, agent, baseBranch: base, dependsOn, permission, queue },
       {
         onSuccess: (task) => {
           onCreated(task)
@@ -131,7 +145,22 @@ export function NewTaskDialog({ projectId, defaultBase, tasks, open, onOpenChang
               </Popover>
             </Field>
           </div>
-          <Field label="Permissions">
+          <div className="grid grid-cols-[10rem_1fr] gap-3">
+            <Field label="Agent">
+              <Select value={agent} onValueChange={(v) => setAgent(v as AgentKind)}>
+                <SelectTrigger className="w-full text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AGENTS.map((a) => (
+                    <SelectItem key={a.value} value={a.value} className="text-xs">
+                      {a.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Permissions">
             <Select value={permission} onValueChange={(v) => setPermission(v as PermissionMode)}>
               <SelectTrigger className="w-full text-xs">
                 <SelectValue />
@@ -144,8 +173,11 @@ export function NewTaskDialog({ projectId, defaultBase, tasks, open, onOpenChang
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{PERMISSIONS.find((p) => p.value === permission)?.hint}</p>
-          </Field>
+            </Field>
+          </div>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            {(agent === "codex" && CODEX_HINTS[permission]) || PERMISSIONS.find((p) => p.value === permission)?.hint}
+          </p>
           <DialogFooter className="items-center sm:justify-between">
             <Label className="flex items-center gap-2 text-xs font-normal">
               <Switch checked={queue} onCheckedChange={setQueue} /> Start when a slot is free

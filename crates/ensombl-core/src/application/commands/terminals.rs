@@ -274,8 +274,10 @@ impl CommandHandler<WithSink<StartTerminal>> for TerminalCommands {
             .find(|p| p.id == cmd.profile_id)
             .ok_or_else(|| Error::Invalid(format!("unknown agent {}", cmd.profile_id)))?;
         let (program, mut args) = self.resolve_program(profile)?;
-        if let (Some(session), AgentKind::Claude) = (cmd.resume, profile.kind) {
-            args.extend(["--resume".into(), session]);
+        match (cmd.resume, profile.kind) {
+            (Some(session), AgentKind::Claude) => args.extend(["--resume".into(), session]),
+            (Some(session), AgentKind::Codex) => args.extend(["resume".into(), session]),
+            _ => {}
         }
         let siblings = self
             .registry

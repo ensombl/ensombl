@@ -2,6 +2,7 @@
 
 pub mod build_info;
 pub mod claude_headless;
+pub mod codex_exec;
 pub mod fs_scanner;
 pub mod fs_workflows;
 pub mod git_cli;
