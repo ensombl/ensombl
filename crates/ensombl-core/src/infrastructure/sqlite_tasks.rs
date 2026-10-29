@@ -151,6 +151,8 @@ mod tests {
             permission: PermissionMode::AcceptEdits,
             session_id: None,
             next_prompt: None,
+            auto_approve: false,
+            workflow: None,
             summary: None,
             error: None,
             created_at,

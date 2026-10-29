@@ -17,7 +17,7 @@ use ensombl_core::application::commands::review::{
 };
 use ensombl_core::application::commands::tasks::{
     ApproveTask, CancelTask, CreateTask, DeleteTask, QueueTask, RespondToTask, RetryTask,
-    SendFollowUp, StopAllTasks, UpdateTaskBranch,
+    SendFollowUp, StartWorkflow, StopAllTasks, UpdateTaskBranch,
 };
 use ensombl_core::application::commands::terminals::{
     CloseTerminal, ResizeTerminal, WriteTerminal,
@@ -35,7 +35,7 @@ use ensombl_core::application::queries::model::GetModel;
 use ensombl_core::application::queries::patterns::GetPatterns;
 use ensombl_core::application::queries::review::{GetSettings, ListComments, ReadSource};
 use ensombl_core::application::queries::tasks::{
-    GetCoordination, GetRunLog, GetTask, GetTaskDiff, GetUsage, ListTasks,
+    GetCoordination, GetRunLog, GetTask, GetTaskDiff, GetUsage, ListTasks, ListWorkflows,
 };
 use ensombl_core::application::queries::terminals::{ListAgents, ListTerminals};
 use ensombl_core::application::queries::workspaces::{GetSession, ListBranches, ListWorktrees};
@@ -122,6 +122,8 @@ pub const NAMES: &[&str] = &[
     "update_task_branch",
     "get_usage",
     "stop_all_tasks",
+    "list_workflows",
+    "start_workflow",
 ];
 
 /// Runs the named command or query. Blocking: call it off the async runtime.
@@ -186,6 +188,8 @@ pub fn call(handlers: &Handlers, name: &str, input: Value) -> Result<Value> {
         "update_task_branch" => command::<UpdateTaskBranch, _>(&*handlers.task_commands, input),
         "get_usage" => query::<GetUsage, _>(&*handlers.task_queries, input),
         "stop_all_tasks" => command::<StopAllTasks, _>(&*handlers.task_commands, input),
+        "list_workflows" => query::<ListWorkflows, _>(&*handlers.task_queries, input),
+        "start_workflow" => command::<StartWorkflow, _>(&*handlers.task_commands, input),
         _ => Err(Error::Invalid(format!("unknown command {name}"))),
     }
 }

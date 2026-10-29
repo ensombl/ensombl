@@ -325,6 +325,19 @@ pub trait RunLog: Send + Sync {
     fn read(&self, run_id: &str) -> Result<Vec<crate::domain::agent_run::RunEvent>>;
 }
 
+/// Workflow definitions kept in a repository.
+pub trait WorkflowStore: Send + Sync {
+    /// Every workflow file under the repo at `root`, by file stem, parsed or
+    /// with what's wrong with it.
+    fn list(
+        &self,
+        root: &Path,
+    ) -> Vec<(
+        String,
+        std::result::Result<crate::domain::workflow::Workflow, String>,
+    )>;
+}
+
 /// Wall-clock time in ms since the epoch; faked in tests.
 pub trait Clock: Send + Sync {
     fn now(&self) -> u64;

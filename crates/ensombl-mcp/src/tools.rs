@@ -336,6 +336,37 @@ pub fn call(backend: &dyn Backend, name: &str, args: &Value) -> Result<String, S
                 "Denied.".into()
             })
         }
+        "list_workflows" => {
+            let workflows = backend.call(
+                "list_workflows",
+                json!({ "projectId": arg(args, "project_id")? }),
+            )?;
+            Ok(pretty(&workflows))
+        }
+        "start_workflow" => {
+            let project_id = arg(args, "project_id")?;
+            let base = match args["base_branch"].as_str() {
+                Some(b) if !b.is_empty() => b.to_string(),
+                _ => backend
+                    .call("list_worktrees", json!({ "projectId": project_id }))?
+                    .as_array()
+                    .and_then(|w| w.iter().find(|l| l["worktree"]["isMain"] == true))
+                    .and_then(|l| l["worktree"]["branch"].as_str().map(String::from))
+                    .ok_or("couldn't tell the project's branch; pass base_branch")?,
+            };
+            let tasks = backend.call(
+                "start_workflow",
+                json!({ "projectId": project_id, "workflow": arg(args, "workflow")?, "input": arg(args, "input")?, "baseBranch": base }),
+            )?;
+            Ok(pretty(&Value::Array(
+                tasks
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(describe)
+                    .collect(),
+            )))
+        }
         "approve_task" | "cancel_task" | "retry_task" => {
             let task = backend.call(name, json!({ "taskId": arg(args, "task_id")? }))?;
             Ok(pretty(&describe(&task)))

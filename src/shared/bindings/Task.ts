@@ -2,6 +2,7 @@
 import type { AgentKind } from "./AgentKind";
 import type { PermissionMode } from "./PermissionMode";
 import type { TaskStatus } from "./TaskStatus";
+import type { WorkflowRef } from "./WorkflowRef";
 
 export type Task = { id: string, projectId: string, title: string, prompt: string, agent: AgentKind, 
 /**
@@ -31,4 +32,12 @@ nextPrompt: string | null,
 /**
  * The agent's final message from the last run.
  */
-summary: string | null, error: string | null, createdAt: number, updatedAt: number, };
+summary: string | null, error: string | null, createdAt: number, updatedAt: number, 
+/**
+ * Merge as soon as the agent finishes (workflow steps that ask for it).
+ */
+autoApprove: boolean, 
+/**
+ * The workflow run this task is a step of.
+ */
+workflow: WorkflowRef | null, };

@@ -3,6 +3,7 @@ import { toast } from "sonner"
 
 import type { CreateTask } from "@/shared/bindings/CreateTask"
 import type { PermissionDecision } from "@/shared/bindings/PermissionDecision"
+import type { StartWorkflow } from "@/shared/bindings/StartWorkflow"
 import type { Task } from "@/shared/bindings/Task"
 import { command } from "@/shared/ipc/client"
 
@@ -30,6 +31,7 @@ export function useTaskCommands() {
     remove: useTaskMutation<ById, void>("delete_task", "delete the task"),
     update: useTaskMutation<ById, void>("update_task_branch", "update the branch"),
     stopAll: useTaskMutation<{ projectId: string }, number>("stop_all_tasks", "stop the tasks"),
+    startWorkflow: useTaskMutation<StartWorkflow, Task[]>("start_workflow", "start the workflow"),
     respond: useTaskMutation<ById & { requestId: string; decision: PermissionDecision }, void>("respond_to_task", "answer the agent"),
     followUp: useTaskMutation<ById & { prompt: string }, Task>("send_follow_up", "send the follow-up"),
   }

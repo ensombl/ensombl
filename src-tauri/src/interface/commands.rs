@@ -17,7 +17,7 @@ use ensombl_core::application::commands::review::{
 };
 use ensombl_core::application::commands::tasks::{
     ApproveTask, CancelTask, CreateTask, DeleteTask, QueueTask, RespondToTask, RetryTask,
-    SendFollowUp, StopAllTasks, UpdateTaskBranch,
+    SendFollowUp, StartWorkflow, StopAllTasks, UpdateTaskBranch,
 };
 use ensombl_core::application::commands::terminals::{
     AttachTerminal, CloseTerminal, ResizeTerminal, StartTerminal, WithSink, WriteTerminal,
@@ -37,8 +37,8 @@ use ensombl_core::application::queries::review::{
     GetSettings, ListComments, ReadSource, SourceText,
 };
 use ensombl_core::application::queries::tasks::{
-    GetCoordination, GetRunLog, GetTask, GetTaskDiff, GetUsage, ListTasks, TaskCoordination,
-    TaskDetail, Usage,
+    GetCoordination, GetRunLog, GetTask, GetTaskDiff, GetUsage, ListTasks, ListWorkflows,
+    TaskCoordination, TaskDetail, Usage, WorkflowInfo,
 };
 use ensombl_core::application::queries::terminals::{AgentAvailability, ListAgents, ListTerminals};
 use ensombl_core::application::queries::workspaces::{
@@ -447,5 +447,21 @@ pub async fn stop_all_tasks(
     handlers: State<'_, Arc<Handlers>>,
     input: StopAllTasks,
 ) -> Result<u32> {
+    blocking(&handlers.task_commands, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn list_workflows(
+    handlers: State<'_, Arc<Handlers>>,
+    input: ListWorkflows,
+) -> Result<Vec<WorkflowInfo>> {
+    blocking(&handlers.task_queries, move |h| h.handle(input)).await
+}
+
+#[tauri::command]
+pub async fn start_workflow(
+    handlers: State<'_, Arc<Handlers>>,
+    input: StartWorkflow,
+) -> Result<Vec<Task>> {
     blocking(&handlers.task_commands, move |h| h.handle(input)).await
 }

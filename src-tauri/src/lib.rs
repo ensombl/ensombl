@@ -123,6 +123,8 @@ pub fn run() {
             cmd::update_task_branch,
             cmd::get_usage,
             cmd::stop_all_tasks,
+            cmd::list_workflows,
+            cmd::start_workflow,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

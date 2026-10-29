@@ -9,7 +9,7 @@ use serde_json::Value;
 use ts_rs::TS;
 
 use crate::application::cqrs::{Query, QueryHandler};
-use crate::application::ports::{RunLog, SessionRepository, TaskGit, TaskStore};
+use crate::application::ports::{RunLog, SessionRepository, TaskGit, TaskStore, WorkflowStore};
 use crate::application::{Error, Result};
 use crate::domain::agent_run::RunEvent;
 use crate::domain::orchestration::{Run, Task, TaskId, TaskStatus};
@@ -76,6 +76,27 @@ pub struct TaskCoordination {
     pub overlaps: Vec<Overlap>,
 }
 
+/// The workflows a project's repository defines.
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ListWorkflows {
+    pub project_id: ProjectId,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorkflowInfo {
+    /// File name without extension; what StartWorkflow takes.
+    pub file: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub steps: Vec<String>,
+    /// Why the file can't be used.
+    pub error: Option<String>,
+}
+
 /// What runs have cost.
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -132,6 +153,9 @@ impl Query for GetRunLog {
 impl Query for GetTaskDiff {
     type Output = String;
 }
+impl Query for ListWorkflows {
+    type Output = Vec<WorkflowInfo>;
+}
 impl Query for GetUsage {
     type Output = Usage;
 }
@@ -176,6 +200,7 @@ pub struct TaskQueries {
     log: Arc<dyn RunLog>,
     sessions: Arc<dyn SessionRepository>,
     git: Arc<dyn TaskGit>,
+    workflows: Arc<dyn WorkflowStore>,
 }
 
 impl TaskQueries {
@@ -184,12 +209,14 @@ impl TaskQueries {
         log: Arc<dyn RunLog>,
         sessions: Arc<dyn SessionRepository>,
         git: Arc<dyn TaskGit>,
+        workflows: Arc<dyn WorkflowStore>,
     ) -> Self {
         Self {
             tasks,
             log,
             sessions,
             git,
+            workflows,
         }
     }
 
@@ -280,6 +307,33 @@ impl QueryHandler<GetCoordination> for TaskQueries {
                     .conflicts(&root, &t.base_branch, &t.branch)
                     .unwrap_or_default(),
                 overlaps,
+            })
+            .collect())
+    }
+}
+
+impl QueryHandler<ListWorkflows> for TaskQueries {
+    fn handle(&self, q: ListWorkflows) -> Result<Vec<WorkflowInfo>> {
+        let root = self.project_root(&q.project_id)?;
+        Ok(self
+            .workflows
+            .list(&root)
+            .into_iter()
+            .map(|(file, parsed)| match parsed {
+                Ok(w) => WorkflowInfo {
+                    name: w.name,
+                    description: w.description,
+                    steps: w.steps.into_iter().map(|s| s.id).collect(),
+                    error: None,
+                    file,
+                },
+                Err(error) => WorkflowInfo {
+                    name: file.clone(),
+                    file,
+                    description: None,
+                    steps: vec![],
+                    error: Some(error),
+                },
             })
             .collect())
     }

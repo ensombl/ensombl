@@ -36,6 +36,7 @@ use crate::domain::terminal::{AgentKind, AgentProfile};
 use crate::infrastructure::build_info::CargoBuildInfo;
 use crate::infrastructure::claude_headless::ClaudeCode;
 use crate::infrastructure::fs_scanner::FsScanner;
+use crate::infrastructure::fs_workflows::FsWorkflows;
 use crate::infrastructure::git_cli::GitCli;
 use crate::infrastructure::json_architecture::JsonArchitecture;
 use crate::infrastructure::json_comments::{JsonComments, JsonSettings};
@@ -230,6 +231,7 @@ impl Core {
             clock: Arc::new(SystemClock),
             worktrees_dir: worktrees_dir.clone(),
             settings: settings.clone(),
+            workflows: Arc::new(FsWorkflows),
         }));
         task_commands.recover()?;
         task_commands.dispatch();
@@ -238,6 +240,7 @@ impl Core {
             run_log,
             sessions.clone(),
             git.clone(),
+            Arc::new(FsWorkflows),
         ));
 
         let handlers = Handlers {

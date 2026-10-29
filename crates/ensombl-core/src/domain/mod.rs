@@ -11,4 +11,5 @@ pub mod patterns;
 pub mod review;
 pub mod system;
 pub mod terminal;
+pub mod workflow;
 pub mod workspace;

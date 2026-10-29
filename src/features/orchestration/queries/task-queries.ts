@@ -5,6 +5,7 @@ import type { Task } from "@/shared/bindings/Task"
 import type { TaskCoordination } from "@/shared/bindings/TaskCoordination"
 import type { TaskDetail } from "@/shared/bindings/TaskDetail"
 import type { Usage } from "@/shared/bindings/Usage"
+import type { WorkflowInfo } from "@/shared/bindings/WorkflowInfo"
 import { query } from "@/shared/ipc/client"
 
 export const taskKeys = {
@@ -15,6 +16,7 @@ export const taskKeys = {
   diff: (taskId: string) => [...taskKeys.all, "diff", taskId] as const,
   coordination: (projectId: string) => [...taskKeys.all, "coordination", projectId] as const,
   usage: (projectId: string) => [...taskKeys.all, "usage", projectId] as const,
+  workflows: (projectId: string) => [...taskKeys.all, "workflows", projectId] as const,
 }
 
 /** A project's orchestrated tasks, oldest first. */
@@ -70,5 +72,14 @@ export function useUsage(projectId: string) {
   return useQuery({
     queryKey: taskKeys.usage(projectId),
     queryFn: () => query<Usage>("get_usage", { input: { projectId, since: startOfToday() } }),
+  })
+}
+
+/** Workflows defined in the project's `.ensombl/workflows`. */
+export function useWorkflows(projectId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: taskKeys.workflows(projectId),
+    queryFn: () => query<WorkflowInfo[]>("list_workflows", { input: { projectId } }),
+    enabled,
   })
 }
