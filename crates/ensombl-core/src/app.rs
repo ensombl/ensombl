@@ -203,12 +203,7 @@ impl Core {
         let decisions = Arc::new(JsonDecisions::open(data_dir.join("patterns.json")));
         let shell = Arc::new(LoginShell::detect());
         let terminals = Arc::new(TerminalRegistry::default());
-        let mut profiles = AgentProfile::builtin();
-        if let Some(mcp) = &options.lead_mcp {
-            for (i, lead) in AgentProfile::leads(mcp).into_iter().enumerate() {
-                profiles.insert(1 + i, lead);
-            }
-        }
+        let profiles = AgentProfile::builtin_with(options.lead_mcp.as_ref());
 
         let terminal_commands = Arc::new(TerminalCommands::new(
             Arc::new(Worktrees::new(sessions.clone(), Some(tasks.clone()))),

@@ -7,4 +7,8 @@ export type StartTerminal = { worktreeId: string, profileId: string, cols: numbe
 /**
  * Continue an agent session (Claude), e.g. taking over a task.
  */
-resume?: string, };
+resume?: string, 
+/**
+ * Start it as the lead, orchestrating through Ensombl.
+ */
+lead?: boolean, };

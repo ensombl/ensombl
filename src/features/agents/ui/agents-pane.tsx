@@ -26,8 +26,8 @@ export function AgentsPane() {
   const active = terminals.find((t) => t.id === selected) ?? terminals[terminals.length - 1]
   const kindOf = (t: TerminalInfo) => agents.find((a) => a.profile.id === t.profileId)?.profile.kind ?? "custom"
 
-  const launch = (profileId: string) =>
-    startTerminal.mutate({ worktreeId: worktree.id, profileId, cols: 100, rows: 30 }, { onSuccess: (info) => setSelected(info.id) })
+  const launch = (profileId: string, lead = false) =>
+    startTerminal.mutate({ worktreeId: worktree.id, profileId, lead, cols: 100, rows: 30 }, { onSuccess: (info) => setSelected(info.id) })
 
   const close = (t: TerminalInfo) => {
     closeTerminal.mutate(t.id)
@@ -90,7 +90,7 @@ export function AgentsPane() {
                 visible={workspaceActive && t.id === active?.id}
                 onRestart={() => {
                   close(t)
-                  launch(t.profileId)
+                  launch(t.profileId, t.lead)
                 }}
                 onClose={() => close(t)}
               />
