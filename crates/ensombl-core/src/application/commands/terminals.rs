@@ -29,6 +29,10 @@ pub struct StartTerminal {
     #[serde(default)]
     #[ts(optional)]
     pub resume: Option<String>,
+    /// Start it as the lead, orchestrating through Ensombl.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub lead: bool,
 }
 
 /// Runs an arbitrary command line (e.g. a terminal editor) through the login shell.
@@ -216,6 +220,7 @@ fn pump(terminal: Arc<Terminal>, mut output: Box<dyn Read + Send>) {
 struct Launch {
     worktree_id: WorktreeId,
     profile_id: String,
+    lead: bool,
     title: String,
     program: PathBuf,
     args: Vec<String>,
@@ -242,6 +247,7 @@ impl TerminalCommands {
             id: id.clone(),
             worktree_id: launch.worktree_id,
             profile_id: launch.profile_id,
+            lead: launch.lead,
             title: launch.title,
             running: true,
             exit_code: None,
@@ -274,6 +280,13 @@ impl CommandHandler<WithSink<StartTerminal>> for TerminalCommands {
             .find(|p| p.id == cmd.profile_id)
             .ok_or_else(|| Error::Invalid(format!("unknown agent {}", cmd.profile_id)))?;
         let (program, mut args) = self.resolve_program(profile)?;
+        if cmd.lead {
+            let lead = profile
+                .lead_args
+                .as_ref()
+                .ok_or_else(|| Error::Invalid(format!("{} can't lead", profile.label)))?;
+            args.extend(lead.iter().cloned());
+        }
         match (cmd.resume, profile.kind) {
             (Some(session), AgentKind::Claude) => args.extend(["--resume".into(), session]),
             (Some(session), AgentKind::Codex) => args.extend(["resume".into(), session]),
@@ -283,17 +296,23 @@ impl CommandHandler<WithSink<StartTerminal>> for TerminalCommands {
             .registry
             .list(&cmd.worktree_id)
             .iter()
-            .filter(|t| t.profile_id == profile.id)
+            .filter(|t| t.profile_id == profile.id && t.lead == cmd.lead)
             .count();
-        let title = if siblings == 0 {
-            profile.label.clone()
+        let label = if cmd.lead {
+            format!("Lead · {}", profile.label)
         } else {
-            format!("{} {}", profile.label, siblings + 1)
+            profile.label.clone()
+        };
+        let title = if siblings == 0 {
+            label
+        } else {
+            format!("{label} {}", siblings + 1)
         };
         self.launch(
             Launch {
                 worktree_id: cmd.worktree_id,
                 profile_id: profile.id.clone(),
+                lead: cmd.lead,
                 title,
                 program,
                 args,
@@ -314,6 +333,7 @@ impl CommandHandler<WithSink<StartCommand>> for TerminalCommands {
             Launch {
                 worktree_id: cmd.worktree_id,
                 profile_id: "command".into(),
+                lead: false,
                 title: cmd.title,
                 program: self.shell.shell(),
                 args: vec!["-lc".into(), cmd.command_line],
@@ -495,6 +515,7 @@ mod tests {
                 cols: 80,
                 rows: 24,
                 resume: None,
+                lead: false,
             },
             sink,
         })
@@ -510,12 +531,69 @@ mod tests {
                 cols: 80,
                 rows: 24,
                 resume: Some("s1".into()),
+                lead: false,
             },
             sink: Arc::new(Collect::default()),
         })
         .unwrap();
         let spec = spawner.specs.lock().unwrap()[0].clone();
         assert_eq!(spec.args, ["--resume", "s1"]);
+    }
+
+    #[test]
+    fn any_cli_that_can_lead_starts_as_the_lead() {
+        let (_, spawner, registry) = setup();
+        let cmds = TerminalCommands::new(
+            Arc::new(Worktrees::new(
+                Arc::new(Sessions({
+                    let mut session = Session::default();
+                    session.add_project("p".into(), "proj".into(), "/repo".into());
+                    session
+                        .open_tab(Worktree {
+                            id: "wt".into(),
+                            project_id: "p".into(),
+                            path: "/repo".into(),
+                            branch: Some("main".into()),
+                            is_main: true,
+                        })
+                        .unwrap();
+                    session
+                })),
+                None,
+            )),
+            Arc::new(FakeShell),
+            spawner.clone(),
+            registry,
+            AgentProfile::builtin_with(Some(&crate::domain::terminal::LeadMcp {
+                config: "/data/mcp.json".into(),
+                command: "/app/Ensombl".into(),
+                args: vec!["--mcp".into()],
+            })),
+        );
+        let lead = |profile: &str| {
+            cmds.handle(WithSink {
+                command: StartTerminal {
+                    worktree_id: "wt".into(),
+                    profile_id: profile.into(),
+                    cols: 80,
+                    rows: 24,
+                    resume: None,
+                    lead: true,
+                },
+                sink: Arc::new(Collect::default()),
+            })
+        };
+        let info = lead("claude").unwrap();
+        assert!(info.lead);
+        assert_eq!(info.title, "Lead · Claude Code");
+        let spec = spawner.specs.lock().unwrap()[0].clone();
+        assert_eq!(spec.args[..2], ["--mcp-config", "/data/mcp.json"]);
+        assert!(
+            lead("shell")
+                .unwrap_err()
+                .to_string()
+                .contains("can't lead")
+        );
     }
 
     #[test]

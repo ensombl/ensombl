@@ -8,4 +8,8 @@ export type AgentProfile = { id: string, label: string, kind: AgentKind,
 /**
  * Program name looked up on the login shell's PATH (or an absolute path).
  */
-command: string, args: Array<string>, };
+command: string, args: Array<string>, 
+/**
+ * Extra args that start it as the lead, when this CLI can lead.
+ */
+leadArgs: Array<string> | null, };
