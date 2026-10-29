@@ -58,7 +58,7 @@ jobs:
           # macOS: sign with the Developer ID certificate and notarize, so downloads open without warnings.
           APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && 'Developer ID Application: Ensombl Pte. Ltd. (FSAH2JB8F4)' || '' }}
+          APPLE_SIGNING_IDENTITY: "${{ runner.os == 'macOS' && 'Developer ID Application: Ensombl Pte. Ltd. (FSAH2JB8F4)' || '' }}"
           APPLE_API_ISSUER: ${{ runner.os == 'macOS' && secrets.APPLE_API_ISSUER || '' }}
           APPLE_API_KEY: ${{ runner.os == 'macOS' && secrets.APPLE_API_KEY || '' }}
         with:
