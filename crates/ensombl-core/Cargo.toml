@@ -1,6 +1,6 @@
 [package]
 name = "ensombl-core"
-version = "0.2.0"
+version = "0.2.1"
 description = "Ensombl's engine: indexing, architecture, terminals and agents, with no UI shell attached"
 authors = ["ensombl"]
 edition = "2024"

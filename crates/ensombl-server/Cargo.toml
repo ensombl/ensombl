@@ -1,6 +1,6 @@
 [package]
 name = "ensombl-server"
-version = "0.2.0"
+version = "0.2.1"
 description = "Ensombl without a window: the core behind an HTTP + WebSocket API"
 authors = ["ensombl"]
 edition = "2024"

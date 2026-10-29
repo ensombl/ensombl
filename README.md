@@ -31,7 +31,7 @@ Download the latest build from [Releases](https://github.com/ensombl/ensombl/rel
 - Linux: `.AppImage` or `.deb`
 - Windows: `.msi`
 
-After you install it, the app updates itself. Builds aren't notarized yet, so the first time you open it on macOS, right-click the app and choose **Open**.
+After you install it, the app updates itself. macOS builds are signed and notarized by Ensombl Pte. Ltd.
 
 ## Develop
 
@@ -57,4 +57,4 @@ How the code is laid out, including the core crate, the shells and the data each
 
 1. Bump `version` in `package.json`, `src-tauri/tauri.conf.json` and the crates' `Cargo.toml` files.
 2. Push a tag, for example `git tag v0.2.0 && git push origin v0.2.0`.
-3. The Release workflow builds every platform and signs the update bundles with the `TAURI_SIGNING_PRIVATE_KEY` secret. It publishes the release together with the `latest.json` that installed apps poll.
+3. The Release workflow builds every platform, signs and notarizes the macOS builds (`APPLE_*` secrets), and signs the update bundles with the `TAURI_SIGNING_PRIVATE_KEY` secret. It publishes the release together with the `latest.json` that installed apps poll.
