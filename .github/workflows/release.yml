@@ -45,10 +45,15 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update bundles that installed apps download.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: CRM ${{ github.ref_name }}
-          releaseBody: See the assets below to download CRM for your platform.
-          releaseDraft: true
+          releaseName: Ensombl ${{ github.ref_name }}
+          releaseBody: Download Ensombl for your platform below. Installed apps update themselves.
+          # Published, not a draft: installed apps look for releases/latest/download/latest.json.
+          releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true
           args: ${{ matrix.args }}

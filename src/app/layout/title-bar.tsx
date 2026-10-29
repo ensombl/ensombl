@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 
-import { Badge } from "@/components/ui/badge"
+import { VersionMenu } from "@/features/updates/ui/version-menu"
 import { cn } from "@/lib/utils"
 
 // macOS draws the traffic lights over this bar (titleBarStyle: Overlay), so leave room for them.
@@ -16,11 +16,7 @@ export function TitleBar({ version, children }: { version?: string; children?: R
       )}
     >
       {children}
-      {version && (
-        <Badge variant="outline" className="ml-auto h-5 shrink-0 px-1.5 font-mono text-[10px]">
-          v{version}
-        </Badge>
-      )}
+      {version && <VersionMenu version={version} />}
     </header>
   )
 }
