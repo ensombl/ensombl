@@ -34,24 +34,58 @@ pub struct AgentProfile {
 /// What the lead agent is told: plan, delegate through Ensombl, review, merge.
 pub const LEAD_INSTRUCTIONS: &str = "You are the lead engineer in Ensombl. Other agents do the implementation: use the ensombl tools to split the user's request into well-scoped tasks (create_task, with depends_on when one needs another merged first), wait for them, read their summaries, activity and diffs, ask for changes with send_follow_up, and approve_task to merge work you're happy with. Answer tasks waiting on a permission with answer_task when the request is safe, otherwise ask the user. Keep the user informed, and only edit code yourself for trivial fixes.";
 
+/// How a lead reaches Ensombl's MCP bridge.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeadMcp {
+    /// A Claude-style MCP config file naming the bridge.
+    pub config: String,
+    /// The bridge itself, for CLIs configured by flags.
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+/// A JSON string or array, which is also valid TOML.
+fn toml(value: impl Into<serde_json::Value>) -> String {
+    value.into().to_string()
+}
+
 impl AgentProfile {
-    /// An interactive Claude that orchestrates through Ensombl's MCP bridge,
-    /// described by the config file at `mcp_config`.
-    pub fn lead(mcp_config: &str) -> AgentProfile {
-        AgentProfile {
-            id: "lead".into(),
-            label: "Lead (orchestrates tasks)".into(),
-            kind: AgentKind::Claude,
-            command: "claude".into(),
-            args: vec![
-                "--mcp-config".into(),
-                mcp_config.into(),
-                "--allowedTools".into(),
-                "mcp__ensombl".into(),
-                "--append-system-prompt".into(),
-                LEAD_INSTRUCTIONS.into(),
-            ],
-        }
+    /// Interactive agents that orchestrate through Ensombl's MCP bridge, one
+    /// per CLI that can, so the user picks which one leads.
+    pub fn leads(mcp: &LeadMcp) -> Vec<AgentProfile> {
+        vec![
+            AgentProfile {
+                id: "lead".into(),
+                label: "Lead · Claude Code".into(),
+                kind: AgentKind::Claude,
+                command: "claude".into(),
+                args: vec![
+                    "--mcp-config".into(),
+                    mcp.config.clone(),
+                    "--allowedTools".into(),
+                    "mcp__ensombl".into(),
+                    "--append-system-prompt".into(),
+                    LEAD_INSTRUCTIONS.into(),
+                ],
+            },
+            AgentProfile {
+                id: "lead-codex".into(),
+                label: "Lead · Codex".into(),
+                kind: AgentKind::Codex,
+                command: "codex".into(),
+                args: vec![
+                    "-c".into(),
+                    format!("mcp_servers.ensombl.command={}", toml(mcp.command.as_str())),
+                    "-c".into(),
+                    format!("mcp_servers.ensombl.args={}", toml(mcp.args.clone())),
+                    // Ensombl's tools run without asking, as for the Claude lead.
+                    "-c".into(),
+                    r#"mcp_servers.ensombl.default_tools_approval_mode="approve""#.into(),
+                    "-c".into(),
+                    format!("developer_instructions={}", toml(LEAD_INSTRUCTIONS)),
+                ],
+            },
+        ]
     }
 
     pub fn builtin() -> Vec<AgentProfile> {
@@ -119,15 +153,29 @@ mod tests {
     }
 
     #[test]
-    fn the_lead_uses_ensombls_tools() {
-        let lead = AgentProfile::lead("/data/mcp.json");
+    fn either_cli_can_lead_with_ensombls_tools() {
+        let leads = AgentProfile::leads(&LeadMcp {
+            config: "/data/mcp.json".into(),
+            command: "/app/Ensombl".into(),
+            args: vec!["--mcp".into(), "--api-file".into(), "/data/api.json".into()],
+        });
         assert_eq!(
-            &lead.args[..4],
+            &leads[0].args[..4],
             [
                 "--mcp-config",
                 "/data/mcp.json",
                 "--allowedTools",
                 "mcp__ensombl"
+            ]
+        );
+        assert_eq!(leads[1].kind, AgentKind::Codex);
+        assert_eq!(
+            &leads[1].args[..4],
+            [
+                "-c",
+                r#"mcp_servers.ensombl.command="/app/Ensombl""#,
+                "-c",
+                r#"mcp_servers.ensombl.args=["--mcp","--api-file","/data/api.json"]"#
             ]
         );
     }

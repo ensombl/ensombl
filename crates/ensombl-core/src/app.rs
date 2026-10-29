@@ -32,7 +32,7 @@ use crate::application::queries::workspaces::WorkspaceQueries;
 use crate::application::worktrees::Worktrees;
 use crate::application::{Error, Result};
 use crate::domain::model::ModelDelta;
-use crate::domain::terminal::{AgentKind, AgentProfile};
+use crate::domain::terminal::{AgentKind, AgentProfile, LeadMcp};
 use crate::infrastructure::build_info::CargoBuildInfo;
 use crate::infrastructure::claude_headless::ClaudeCode;
 use crate::infrastructure::codex_exec::Codex;
@@ -66,8 +66,8 @@ pub struct AppPaths {
 /// Shell-specific choices.
 #[derive(Debug, Clone, Default)]
 pub struct CoreOptions {
-    /// MCP config pointing at Ensombl's bridge; adds the lead agent profile.
-    pub lead_mcp_config: Option<PathBuf>,
+    /// Ensombl's MCP bridge; adds the lead agent profiles.
+    pub lead_mcp: Option<LeadMcp>,
 }
 
 pub const INDEX_PROGRESS: &str = "index://progress";
@@ -204,8 +204,10 @@ impl Core {
         let shell = Arc::new(LoginShell::detect());
         let terminals = Arc::new(TerminalRegistry::default());
         let mut profiles = AgentProfile::builtin();
-        if let Some(config) = &options.lead_mcp_config {
-            profiles.insert(1, AgentProfile::lead(&config.to_string_lossy()));
+        if let Some(mcp) = &options.lead_mcp {
+            for (i, lead) in AgentProfile::leads(mcp).into_iter().enumerate() {
+                profiles.insert(1 + i, lead);
+            }
         }
 
         let terminal_commands = Arc::new(TerminalCommands::new(
