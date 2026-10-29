@@ -44,9 +44,18 @@
     "category": "DeveloperTool",
     "shortDescription": "Where clankers come together",
     "longDescription": "An architecture-first editor for coding agents: a live UML of your codebase next to Claude Code, Codex and friends.",
-    "copyright": "© ensombl",
+    "copyright": "\u00a9 ensombl",
     "macOS": {
       "minimumSystemVersion": "12.0"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4Q0U4QkZDNkEwQjU4OEEKUldTS1dBdHEvSXZPT0FERW0xSzRuMWdBbTFtOFFIczBaOGcvaStvM2NrYmczWG9aNjNSK1JaL3AK",
+      "endpoints": [
+        "https://github.com/ensombl/ensombl/releases/latest/download/latest.json"
+      ]
     }
   }
 }
